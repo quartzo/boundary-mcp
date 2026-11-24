@@ -50,7 +50,7 @@ func main() {
 		llmBaseURL    = flag.String("llm-base-url", envOr("BOUNDARY_LLM_BASE_URL", ""), "OpenAI-compatible API base URL")
 		llmAPIKey     = flag.String("llm-api-key", envOr("BOUNDARY_LLM_API_KEY", ""), "API key for the LLM provider")
 		llmModel      = flag.String("llm-model", envOr("BOUNDARY_LLM_MODEL", ""), "model used by the semantic compiler")
-		judgeMode     = flag.String("judge", envOr("BOUNDARY_JUDGE", "off"), "semantic judge mode: off or enforce")
+		judgeMode     = flag.String("judge", envOr("BOUNDARY_JUDGE", "off"), "semantic judge mode: off, auto, or enforce")
 		judgeBaseURL  = flag.String("judge-base-url", envOr("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"), "System One API base URL")
 		judgeAPIKey   = flag.String("judge-api-key", envOr("OPENROUTER_API_KEY", ""), "OpenRouter API key for JEV")
 		judgeModel    = flag.String("judge-model", envOr("JUDGE_MODEL", "typesafe/jev-1.14"), "JEV model ID")
@@ -124,19 +124,21 @@ func main() {
 }
 
 func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judgeBaseURL, judgeAPIKey, judgeModel string, judgeReviewAt, judgeRejectAt float64) (*compiler.Compiler, error) {
-	mode := compiler.JudgeMode(strings.TrimSpace(judgeMode))
-	if mode == "" {
-		mode = compiler.JudgeOff
+	rawMode := strings.ToLower(strings.TrimSpace(judgeMode))
+	if rawMode == "" {
+		rawMode = "off"
 	}
-	switch mode {
-	case compiler.JudgeOff, compiler.JudgeEnforce:
+	switch rawMode {
+	case "off", "auto", "enforce":
 	default:
-		return nil, fmt.Errorf("unknown judge mode %q (want off or enforce)", judgeMode)
+		return nil, fmt.Errorf("unknown judge mode %q (want off, auto or enforce)", judgeMode)
 	}
-	if mode == compiler.JudgeEnforce && strings.TrimSpace(model) == "" {
+
+	modelConfigured := strings.TrimSpace(model) != ""
+	if rawMode == "enforce" && !modelConfigured {
 		return nil, errors.New("judge=enforce requires the semantic compiler (-llm-model)")
 	}
-	if strings.TrimSpace(model) == "" {
+	if !modelConfigured {
 		return nil, nil
 	}
 	if strings.TrimSpace(baseURL) == "" {
@@ -148,21 +150,26 @@ func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judge
 		return nil, err
 	}
 
+	mode := compiler.JudgeOff
 	var semanticJudge judge.Judge
-	if mode == compiler.JudgeEnforce {
-		judgeAPIKey = judge.ResolveAPIKey(judgeAPIKey)
-		if strings.TrimSpace(judgeAPIKey) == "" {
-			return nil, errors.New("judge=enforce requires -judge-api-key, OPENROUTER_API_KEY, or opencode auth")
+	if rawMode == "enforce" || rawMode == "auto" {
+		key := judge.ResolveAPIKey(judgeAPIKey)
+		if key == "" {
+			if rawMode == "enforce" {
+				return nil, errors.New("judge=enforce requires -judge-api-key, OPENROUTER_API_KEY, or opencode auth")
+			}
+		} else {
+			jev, err := judge.NewOpenRouter(judge.OpenRouterOptions{
+				BaseURL: judgeBaseURL,
+				APIKey:  key,
+				Model:   judgeModel,
+			})
+			if err != nil {
+				return nil, err
+			}
+			semanticJudge = judge.NewCached(jev, jev.Model())
+			mode = compiler.JudgeEnforce
 		}
-		jev, err := judge.NewOpenRouter(judge.OpenRouterOptions{
-			BaseURL: judgeBaseURL,
-			APIKey:  judgeAPIKey,
-			Model:   judgeModel,
-		})
-		if err != nil {
-			return nil, err
-		}
-		semanticJudge = judge.NewCached(jev, jev.Model())
 	}
 
 	var targets []compiler.SDKTarget

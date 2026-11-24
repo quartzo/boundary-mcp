@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 6 experiment implemented.** `internal/judge` calls JEV through OpenRouter's typed System One API and runs after the deterministic gates in `-judge=enforce` mode; `cmd/judge-eval` runs the labeled proposal benchmark. The Phase 5 litmus (including the sandboxed `actor_enrich` reconstruction) remains green. Calibration on the labeled proposal set is the next step. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 6 experiment implemented and seed-calibrated.** `internal/judge` calls JEV through OpenRouter's typed System One API and runs after the deterministic gates in `-judge=enforce` mode; `-judge=auto` keeps it active in sandbox/test sessions when the semantic compiler and a key are configured. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-judge path. The Phase 5 litmus remains green. Real-proposal calibration is still required before accepting ADR-0001. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -138,13 +138,14 @@ export OPENROUTER_API_KEY=...
 ./bin/boundary-mcp -llm-model ... -judge=enforce
 ```
 
-It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. `-judge=off` is the default; `judge=enforce` requires the semantic compiler and an OpenRouter key. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
+It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. `-judge=off` is the deterministic default; `-judge=auto` enables enforce when the semantic compiler is configured and a key is available; `-judge=enforce` forces it. `sandbox-run` uses `auto` by default, so sandbox sessions exercise the judge when the compiler is configured. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
 
 The calibrated defaults are `-judge-review-at 0.40` and `-judge-reject-at 0.70`. Run the labeled benchmark with:
 
 ```bash
 go run ./cmd/judge-eval -cases internal/judge/testdata/cases
 make judge-calibrate   # built-in 100-case synthetic set
+make judge-e2e         # one live compiler -> judge proposal
 ```
 
 A 100-case synthetic calibration at 0.40/0.70 produced 0 false allows across two runs; false escalations on compatible cases were 0 in the first run and 1 in the second (allow maximum 0.39–0.42), while semantic violations started at 0.89. p95 was 356–558 ms and the run cost ≈ $0.0055 (≈ $0.00005 per case). JEV probabilities vary between runs; the seed set is template-generated, so revalidate on real proposals before accepting ADR-0001.

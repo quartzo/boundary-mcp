@@ -40,7 +40,7 @@ For local development, when `OPENROUTER_API_KEY` is unset, the client reads the 
 
 ### Rollout
 
-The project has no production traffic. The Phase 6 experiment runs in **enforce** mode from the start; a record-only mode exists only as a debugging aid for the benchmark. The deterministic gates and the `judge=off` switch are the safety net, so there is no reason to stage a shadow rollout.
+The project has no production traffic. The Phase 6 experiment runs in **enforce** mode from the start; a record-only mode exists only as a debugging aid for the benchmark. The deterministic gates and the `judge=off` switch are the safety net, so there is no reason to stage a shadow rollout. The CLI supports `judge=auto`, which enables enforce when the semantic compiler and a key are configured; `sandbox-run` uses auto by default. `make judge-e2e` exercises the live compiler-to-judge path, while unit tests stay offline with a fake judge.
 
 ### Candidate rules for proposals
 
