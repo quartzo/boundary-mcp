@@ -1,0 +1,14 @@
+// Backwards-compatible evolution of valid.fbs: a new field is appended.
+namespace boundary.test;
+
+table EnrichRequest {
+  correlation_id:string (id: 0);
+  document_id:string (id: 1);
+  requested_at:ulong (id: 2);
+}
+
+table EnrichResponse {
+  confidence_score:float (id: 0);
+}
+
+root_type EnrichRequest;

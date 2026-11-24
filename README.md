@@ -62,7 +62,7 @@ The target layout (see the architecture document for details):
 ## Requirements
 
 - **Go** 1.27 or newer
-- **FlatBuffers compiler** (`flatc`)
+- **FlatBuffers compiler** (`flatc`) — exercised in integration tests with 25.12.x
 - **Bubblewrap** (`bwrap`) on Linux, for sandboxed agent sessions
 - **opencode**, for the agent-facing workflow
 
@@ -73,7 +73,7 @@ go build ./...   # build all packages
 go test ./...    # run the test suite
 ```
 
-The `internal/fbs` unit tests do not require `flatc` on the host: the compiler is exercised through an injected command runner. A real `flatc` is only needed for integration and generated bindings.
+Unit tests use an injected command runner and do not require `flatc`. The integration tests in `internal/fbs` exercise a real `flatc` and run automatically when it is on `PATH`; they are skipped otherwise.
 
 ## Documentation
 

@@ -1,0 +1,12 @@
+// Breaking evolution of valid.fbs: an existing field is deleted.
+namespace boundary.test;
+
+table EnrichRequest {
+  correlation_id:string (id: 0);
+}
+
+table EnrichResponse {
+  confidence_score:float (id: 0);
+}
+
+root_type EnrichRequest;

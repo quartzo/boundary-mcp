@@ -1,0 +1,13 @@
+// Base contract used by the internal/fbs integration tests.
+namespace boundary.test;
+
+table EnrichRequest {
+  correlation_id:string (id: 0);
+  document_id:string (id: 1);
+}
+
+table EnrichResponse {
+  confidence_score:float (id: 0);
+}
+
+root_type EnrichRequest;
