@@ -74,6 +74,10 @@ cleanup() {
     kill "$MCP_PID" 2>/dev/null || true
     wait "$MCP_PID" 2>/dev/null || true
   fi
+  # bwrap creates an empty mount point for the read-only opencode.json.
+  if [[ -f "$ACTOR_DIR/opencode.json" && ! -s "$ACTOR_DIR/opencode.json" ]]; then
+    rm -f "$ACTOR_DIR/opencode.json"
+  fi
   rm -rf "$RUN_DIR"
 }
 trap cleanup EXIT
@@ -184,8 +188,16 @@ add_ro "$ROOT_DIR/sdk" /sdk
 ARGS+=(
   --bind "$ACTOR_DIR" /workspace
   --ro-bind "$CONFIG" /workspace/opencode.json
-  opencode --standalone
 )
+
+# `run` is an opencode subcommand whose flags must follow it; the default TUI
+# keeps --standalone as a top-level flag.
+if [[ "${1:-}" == "run" ]]; then
+  shift
+  ARGS+=(opencode run --standalone)
+else
+  ARGS+=(opencode --standalone)
+fi
 
 if [[ -n "${BOUNDARY_DRY_RUN:-}" ]]; then
   echo "boundary-mcp URL: $MCP_URL"

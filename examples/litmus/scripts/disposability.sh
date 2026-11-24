@@ -59,10 +59,15 @@ mkdir -p "$ACTOR_DIR"
 cp "$PROMPT" "$ACTOR_DIR/PROMPT.md"
 
 echo "Launching the sandboxed agent..."
+AGENT_ARGS=(run --auto)
+if [[ -n "${LITMUS_MODEL:-}" ]]; then
+  AGENT_ARGS+=(--model "$LITMUS_MODEL")
+fi
+AGENT_ARGS+=("Implement the task in /workspace/PROMPT.md. Use the boundary MCP tools. When you are done, call verify_actor_behavior for actor_enrich.")
+
 BOUNDARY_ROOT="$LITMUS_ROOT" \
 BOUNDARY_MCP_BIN="$MCP_BIN" \
-  "$REPO_ROOT/cmd/sandbox-run/sandbox-run.sh" "$ACTOR" \
-    --auto run "Implement the task in /workspace/PROMPT.md. Use the boundary MCP tools. When you are done, call verify_actor_behavior for actor_enrich."
+  "$REPO_ROOT/cmd/sandbox-run/sandbox-run.sh" "$ACTOR" "${AGENT_ARGS[@]}"
 
 echo "Verifying the reconstructed actor..."
 if (cd "$REPO_ROOT" && go run ./examples/litmus/verify -root examples/litmus); then

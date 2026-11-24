@@ -40,3 +40,9 @@ examples/litmus/actors/*/bin/
 # Go binaries built directly inside litmus actor workspaces
 examples/litmus/actors/*/actor_enrich
 examples/litmus/actors/*/actor_ingest
+
+# bwrap mount point for the generated opencode config
+examples/litmus/actors/*/opencode.json
+
+# Sandbox mount point created by bwrap inside actor workspaces
+examples/litmus/actors/*/opencode.json
