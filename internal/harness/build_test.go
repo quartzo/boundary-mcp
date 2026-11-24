@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -127,6 +128,71 @@ root_type Wrapper;
 	}
 	if err := schema.ValidateFor(frame, "Wrapper"); err != nil {
 		t.Fatalf("built frame is invalid: %v", err)
+	}
+}
+
+func TestReadFieldPath(t *testing.T) {
+	t.Parallel()
+
+	schema := compileSchema(t, buildSchema)
+	frame, err := schema.BuildFrame(FrameSpec{
+		Table: "Msg",
+		Values: map[string]any{
+			"name":  "abc",
+			"child": map[string]any{"value": 5},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildFrame: %v", err)
+	}
+
+	value, err := schema.ReadFieldPath(frame, "child.value")
+	if err != nil {
+		t.Fatalf("ReadFieldPath: %v", err)
+	}
+	if value != int64(5) {
+		t.Fatalf("value = %v, want 5", value)
+	}
+
+	for _, path := range []string{"child.nope", "name.value", "nope.value"} {
+		if _, err := schema.ReadFieldPath(frame, path); err == nil {
+			t.Errorf("ReadFieldPath(%q) returned nil error", path)
+		}
+	}
+}
+
+func TestNestedBoundaryMutations(t *testing.T) {
+	t.Parallel()
+
+	schema := compileSchema(t, buildSchema)
+	frame, err := schema.BuildFrame(FrameSpec{
+		Table: "Msg",
+		Values: map[string]any{
+			"name":  "abc",
+			"child": map[string]any{"value": 5},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildFrame: %v", err)
+	}
+
+	mutations, err := schema.BoundaryMutations(frame)
+	if err != nil {
+		t.Fatalf("BoundaryMutations: %v", err)
+	}
+
+	var found *Mutation
+	for i := range mutations {
+		if strings.HasPrefix(mutations[i].Name, "child.value=") {
+			found = &mutations[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("no nested child.value mutation was generated")
+	}
+	if err := schema.Validate(found.Payload); err != nil {
+		t.Fatalf("nested mutation is invalid: %v", err)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -236,6 +237,60 @@ func (s *Schema) ReadFieldFor(payload []byte, tableName, fieldName string) (valu
 	}
 }
 
+// ReadFieldPath reads a scalar or string field using a dotted path from the
+// schema root table, for example "request.document_id".
+func (s *Schema) ReadFieldPath(payload []byte, path string) (value any, err error) {
+	defer recoverMalformed(&err)
+
+	if strings.TrimSpace(path) == "" {
+		return nil, errors.New("harness: empty field path")
+	}
+	obj := s.Root
+	if obj == nil {
+		return nil, errors.New("harness: schema has no root table")
+	}
+
+	d := &decoder{b: payload}
+	tablePos := d.root()
+	parts := strings.Split(path, ".")
+
+	for i, part := range parts {
+		field := obj.Field(part)
+		if field == nil {
+			return nil, fmt.Errorf("harness: table %s has no field %q", ShortName(obj.Name), part)
+		}
+		pos, ok := d.fieldPos(tablePos, field.ID)
+		if !ok {
+			return nil, fmt.Errorf("harness: field %q is absent", path)
+		}
+
+		if i == len(parts)-1 {
+			switch {
+			case field.Type.Base == BaseString:
+				return d.stringAt(pos), nil
+			case field.Type.Base.IsScalar():
+				return d.scalarValue(field.Type.Base, pos), nil
+			default:
+				return nil, fmt.Errorf("harness: field %q is not scalar or string", path)
+			}
+		}
+
+		if field.Type.Base != BaseObj {
+			return nil, fmt.Errorf("harness: field %q is not a table", part)
+		}
+		target := s.ObjectAt(field.Type.Index)
+		if target == nil {
+			return nil, fmt.Errorf("harness: unknown object index %d", field.Type.Index)
+		}
+		if target.IsStruct {
+			return nil, fmt.Errorf("harness: struct traversal is not supported")
+		}
+		tablePos = d.deref(pos)
+		obj = target
+	}
+	return nil, errors.New("harness: invalid field path")
+}
+
 func (s *Schema) rootField(payload []byte, fieldName string) (*Field, int, error) {
 	return s.fieldFor(payload, "", fieldName)
 }
@@ -302,37 +357,8 @@ func (s *Schema) BoundaryMutations(payload []byte) (mutations []Mutation, err er
 	d := &decoder{b: payload}
 	root := d.root()
 
-	for _, field := range obj.Fields {
-		if field.Deprecated {
-			continue
-		}
-		pos, ok := d.fieldPos(root, field.ID)
-		if !ok {
-			continue
-		}
-		switch {
-		case field.Type.Base.IsScalar():
-			for _, value := range boundaryValues(field.Type.Base) {
-				mutated := append([]byte(nil), payload...)
-				if err := writeScalar(mutated, pos, field.Type.Base, value); err != nil {
-					return nil, err
-				}
-				mutations = append(mutations, Mutation{
-					Name:    fmt.Sprintf("%s=%v", field.Name, value),
-					Payload: mutated,
-				})
-			}
-		case field.Type.Base == BaseString:
-			str := d.stringAt(pos)
-			if len(str) > 0 {
-				mutated := append([]byte(nil), payload...)
-				target := d.deref(pos)
-				for i := 0; i < len(str); i++ {
-					mutated[target+4+i] = 0xFF
-				}
-				mutations = append(mutations, Mutation{Name: field.Name + "=invalid-utf8", Payload: mutated})
-			}
-		}
+	if err := s.appendFieldMutations(d, root, obj, "", payload, 0, &mutations); err != nil {
+		return nil, err
 	}
 
 	if len(payload) > 2 {
@@ -357,6 +383,57 @@ func (s *Schema) BoundaryMutations(payload []byte) (mutations []Mutation, err er
 	}
 
 	return mutations, nil
+}
+
+func (s *Schema) appendFieldMutations(d *decoder, tablePos int, obj *Object, prefix string, payload []byte, depth int, out *[]Mutation) error {
+	if depth > 8 {
+		return nil
+	}
+
+	for _, field := range obj.Fields {
+		if field.Deprecated {
+			continue
+		}
+		pos, ok := d.fieldPos(tablePos, field.ID)
+		if !ok {
+			continue
+		}
+		name := prefix + field.Name
+
+		switch {
+		case field.Type.Base.IsScalar():
+			for _, value := range boundaryValues(field.Type.Base) {
+				mutated := append([]byte(nil), payload...)
+				if err := writeScalar(mutated, pos, field.Type.Base, value); err != nil {
+					return err
+				}
+				*out = append(*out, Mutation{
+					Name:    fmt.Sprintf("%s=%v", name, value),
+					Payload: mutated,
+				})
+			}
+		case field.Type.Base == BaseString:
+			str := d.stringAt(pos)
+			if len(str) > 0 {
+				mutated := append([]byte(nil), payload...)
+				target := d.deref(pos)
+				for i := 0; i < len(str); i++ {
+					mutated[target+4+i] = 0xFF
+				}
+				*out = append(*out, Mutation{Name: name + "=invalid-utf8", Payload: mutated})
+			}
+		case field.Type.Base == BaseObj:
+			target := s.ObjectAt(field.Type.Index)
+			if target == nil || target.IsStruct {
+				continue
+			}
+			childPos := d.deref(pos)
+			if err := s.appendFieldMutations(d, childPos, target, name+".", payload, depth+1, out); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func boundaryValues(base BaseType) []any {

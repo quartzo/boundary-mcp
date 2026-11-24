@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 type compiledCheck struct {
@@ -56,7 +57,15 @@ func compileChecks(schema *Schema, table string, specs []CheckSpec) (PeerCheck, 
 			}
 		}
 		for _, check := range compiled {
-			value, err := schema.ReadFieldFor(frame, table, check.field)
+			var (
+				value any
+				err   error
+			)
+			if strings.Contains(check.field, ".") {
+				value, err = schema.ReadFieldPath(frame, check.field)
+			} else {
+				value, err = schema.ReadFieldFor(frame, table, check.field)
+			}
 			if err != nil {
 				return err
 			}
