@@ -214,7 +214,7 @@ To ensure black-box actors respect both structural types and temporal semantics,
 
 ### 6.1 Testing an Actor as Server (Receiver)
 
-`boundary-mcp` acts as an **Oracle Client + Structured Fuzzer** (using `pgregory.net/rapid` in Go):
+`boundary-mcp` acts as a **Harness Client + Structured Fuzzer** (using `pgregory.net/rapid` in Go):
 
 - The actor binary is spawned as an isolated child process attached to binary IPC channels (Unix Domain Socket or length-prefixed `stdin`/`stdout` framing: `uint32` little-endian length + FlatBuffer payload).
 - **Structural Mutation Tests:** Dispatches valid buffers, buffers with omitted optional fields, extreme Unicode strings, boundary numeric values (`0`, `-1`, `MaxUint64`), and truncated/corrupted frames, verifying that the actor never panics and cleanly drops malformed input or returns a typed error.
@@ -224,10 +224,10 @@ To ensure black-box actors respect both structural types and temporal semantics,
 
 ### 6.2 Testing an Actor as Client (Emitter)
 
-`boundary-mcp` spins up an **Oracle Server** (State-Machine Mock) speaking the `.fbs` contract:
+`boundary-mcp` spins up a **Reference Mock Peer** — a state-machine mock that implements the contract as the reference counterpart. The mock is the *test oracle*: it knows the expected transitions and returns the verdict.
 
-1. The client actor is launched and pointed at the Oracle Server's socket.
-2. The Oracle executes a battery of protocol scenarios derived from `state_machine.json`:
+1. The client actor is launched and pointed at the Reference Mock Peer's socket.
+2. The mock peer executes a battery of protocol scenarios derived from `state_machine.json`:
    - **Happy Path:** Accepts `EnrichRequest`, validates that outgoing fields satisfy `INV-01` and `INV-03`, and emits `EnrichResponse`.
    - **Domain Error Path:** Returns `EnrichError` and verifies the client transitions cleanly to a terminal state without infinite retry loops.
    - **Latency / Timeout Path (`INV-05`):** Deliberately holds the response for 600ms and counts retry attempts, failing the test if the client exceeds 2 retries or violates backoff bounds.
@@ -292,7 +292,7 @@ The launcher:
 ### Phase 4: Boundary Test Inducer (`internal/harness`)
 
 - [ ] Implement property-based test generation using `pgregory.net/rapid` driven by `.fbs` binary schema reflection (`.bfbs` output from `flatc --binary --schema`).
-- [ ] Implement the State-Machine Oracle Server to verify client actors.
+- [ ] Implement the Reference Mock Peer (state-machine mock) used to verify client actors.
 
 ### Phase 5: Litmus Test (Thesis Validation)
 
@@ -304,4 +304,4 @@ The launcher:
 
 ### Implementation Note for Phase 4
 
-One particularly useful feature of `flatc` for `internal/harness` is **`--binary --schema`**, which compiles any `.fbs` into a self-describing `.bfbs` (*Binary FlatBuffer Schema*). Using FlatBuffers' official reflection schema (`reflection.fbs`), the Go harness can **dynamically inspect tables, field types, enums, and default values at runtime** without recompiling `boundary-mcp` whenever a contract evolves — making the structured fuzzer and Oracle Server generic across any protocol you define.
+One particularly useful feature of `flatc` for `internal/harness` is **`--binary --schema`**, which compiles any `.fbs` into a self-describing `.bfbs` (*Binary FlatBuffer Schema*). Using FlatBuffers' official reflection schema (`reflection.fbs`), the Go harness can **dynamically inspect tables, field types, enums, and default values at runtime** without recompiling `boundary-mcp` whenever a contract evolves — making the structured fuzzer and Reference Mock Peer generic across any protocol you define.
