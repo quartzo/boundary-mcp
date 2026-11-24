@@ -30,3 +30,6 @@ vendor/
 # Local environment
 .env
 .env.local
+
+# Sandbox runtime state
+.sandbox/

@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 1 complete.** The deterministic core lives in [`internal/fbs`](internal/fbs): a `flatc` wrapper (code generation, `.bfbs` reflection output, and a `--conform` compatibility gate) plus the `[uint32 LE length][FlatBuffer payload]` framing used between actors. The next milestone is Phase 2 (MCP server and sandbox launcher). See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 2 complete.** `cmd/boundary-mcp` serves the control plane over stdio or loopback Streamable HTTP, exposing `get_boundary_context` (filtered `purpose.md` + full `protocol.fbs` + SDK path) plus the `propose_contract_evolution` and `verify_actor_behavior` tool contracts. `cmd/sandbox-run` launches isolated `opencode` sessions while `boundary-mcp` stays outside the mount namespace. The next milestone is Phase 3 (bidirectional semantic compiler). See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why
 
@@ -36,7 +36,7 @@ Each agent session sees only:
 
 - its own `/workspace` (read-write),
 - the generated SDK under `/sdk` (read-only),
-- a filtered boundary context served by `boundary-mcp` over stdio.
+- a filtered boundary context served by `boundary-mcp` over a bearer-protected loopback endpoint.
 
 ## Repository layout
 
@@ -49,14 +49,16 @@ The target layout (see the architecture document for details):
 ├── governance/              # (planned) source of truth: purpose, schema, tests
 ├── sdk/                     # (planned) generated FlatBuffers bindings
 ├── actors/                  # (planned) one isolated sandbox per actor
+├── bin/                     # build output (gitignored)
 ├── cmd/
-│   ├── boundary-mcp/        # (planned) MCP server
-│   └── sandbox-run/         # (planned) bwrap/container launcher
+│   ├── boundary-mcp/        # MCP server (stdio / loopback HTTP)
+│   └── sandbox-run/         # bwrap launcher + opencode.json template
 └── internal/
     ├── compiler/            # (planned) purpose.md <-> protocol.fbs
     ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
+    ├── governance/          # purpose.md parser and actor filtering
     ├── harness/             # (planned) deterministic test runner
-    └── mcp/                 # (planned) MCP tool handlers
+    └── mcp/                 # MCP tools, handlers, HTTP auth
 ```
 
 ## Requirements
@@ -69,11 +71,22 @@ The target layout (see the architecture document for details):
 ## Development
 
 ```bash
-go build ./...   # build all packages
+make build       # build bin/boundary-mcp
 go test ./...    # run the test suite
+go vet ./...
 ```
 
 Unit tests use an injected command runner and do not require `flatc`. The integration tests in `internal/fbs` exercise a real `flatc` and run automatically when it is on `PATH`; they are skipped otherwise.
+
+## Sandbox
+
+Once `actors/<name>/` and `governance/` exist, launch an isolated session with:
+
+```bash
+./cmd/sandbox-run/sandbox-run.sh actor_ingest
+```
+
+`sandbox-run` starts `boundary-mcp` outside the sandbox, waits for readiness, renders `opencode.json`, and launches `bwrap` with only the actor workspace and the read-only SDK mounted. Set `BOUNDARY_DRY_RUN=1` to inspect the plan without launching anything.
 
 ## Documentation
 
