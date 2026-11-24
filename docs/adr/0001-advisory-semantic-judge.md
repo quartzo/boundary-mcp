@@ -40,7 +40,7 @@ For local development, when `OPENROUTER_API_KEY` is unset, the client reads the 
 
 ### Rollout
 
-The project has no production traffic. The Phase 6 experiment runs in **enforce** mode from the start; a record-only mode exists only as a debugging aid for the benchmark. The deterministic gates and the `judge=off` switch are the safety net, so there is no reason to stage a shadow rollout. The CLI supports `judge=auto`, which enables enforce when the semantic compiler and a key are configured; `sandbox-run` uses auto by default. `make judge-e2e` exercises the live compiler-to-judge path, while unit tests stay offline with a fake judge.
+The project has no production traffic. The Phase 6 experiment runs in **enforce** mode from the start; a record-only mode exists only as a debugging aid for the benchmark. The deterministic gates are the safety net. When the semantic compiler is enabled, the judge is mandatory and a missing key fails startup; the CLI has no judge off switch. `judge=off` exists only in library test configuration with a fake judge. `make judge-e2e` exercises the live compiler-to-judge path while unit tests stay offline.
 
 ### Candidate rules for proposals
 
@@ -99,7 +99,7 @@ Compatible probabilities maxed at 0.39–0.42 across two runs; semantic violatio
 - p95 judge latency ≤ 500 ms and judge cost < 5% of the reasoning-model call it replaces.
 - Thresholds and labels are reproducible and stored with the evaluation.
 
-**Rollback.** The judge is behind configuration (`judge=off`) and can be disabled without changing the compiler or harness. If the experiment fails, this ADR is marked `Rejected` and the system keeps the deterministic-only flow.
+**Rollback.** The CLI has no judge off switch when the semantic compiler is enabled; rolling back means disabling the compiler and judge together, or reverting the release. Library tests can use `JudgeOff` with a fake. If the experiment fails, this ADR is marked `Rejected` and the judge is removed from the compiler path.
 
 ## Consequences
 
@@ -115,7 +115,7 @@ Compatible probabilities maxed at 0.39–0.42 across two runs; semantic violatio
 - New optional external dependency and credential to manage.
 - Thresholds require domain calibration; probabilities are not certainty.
 - Governance text leaves the host for a third-party service (OpenRouter / TypeSafe). The LLM provider already receives it during proposal generation; this adds another processor.
-- A provider outage or rate limit can block proposals in enforce mode. The judge client fails closed; `judge=off` is the escape hatch.
+- A provider outage or rate limit blocks proposals; this is intentional. Restore the provider or roll back the release; there is no product off switch.
 - Risk that operators treat a typed answer as a hard gate.
 
 ## Alternatives considered

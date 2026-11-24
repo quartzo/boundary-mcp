@@ -29,7 +29,8 @@ type LLM interface {
 type JudgeMode string
 
 const (
-	// JudgeOff disables the judge.
+	// JudgeOff disables the judge (test-only; the CLI always enforces it when
+	// the semantic compiler is enabled).
 	JudgeOff JudgeMode = "off"
 	// JudgeEnforce applies the judge verdict before committing.
 	JudgeEnforce JudgeMode = "enforce"
@@ -360,7 +361,7 @@ func (c *Compiler) apply(ctx context.Context, in applyInput) (*mcp.ProposalResul
 	}
 
 	var judgeRecord *judgeMeta
-	if c.opts.JudgeMode == JudgeEnforce && c.opts.Judge != nil && in.direction == directionPropose {
+	if c.opts.JudgeMode == JudgeEnforce && c.opts.Judge != nil {
 		assessment, err := c.opts.Judge.Evaluate(ctx, judge.Input{
 			Actor:              in.actor,
 			Intent:             in.intent,

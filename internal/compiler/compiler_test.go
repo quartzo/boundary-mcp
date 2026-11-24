@@ -197,6 +197,9 @@ func TestSyncPurposeToProtocol(t *testing.T) {
 		"contract_evolution": proposalJSON(t, basePurpose, addField(baseProtocol, "requested_at:ulong (id: 2);"), baseState),
 	}}
 	c, dir := newTestCompiler(t, fake)
+	semanticJudge := &fakeJudge{assessment: &judge.Assessment{Rules: map[string]float64{"drift": 0.01}}}
+	c.opts.Judge = semanticJudge
+	c.opts.JudgeMode = JudgeEnforce
 
 	if res, err := c.Propose(context.Background(), mcp.ProposalRequest{ActorName: "actor_ingest", IntentDescription: "first change"}); err != nil || res.Status != "committed" {
 		t.Fatalf("initial Propose: res=%+v err=%v", res, err)
@@ -223,6 +226,9 @@ func TestSyncPurposeToProtocol(t *testing.T) {
 	}
 	if entries := historyEntries(t, dir); len(entries) != 2 {
 		t.Fatalf("history entries = %v, want 2", entries)
+	}
+	if semanticJudge.calls < 2 {
+		t.Fatalf("judge calls = %d, want the initial proposal and the sync to be judged", semanticJudge.calls)
 	}
 }
 

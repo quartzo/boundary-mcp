@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 6 experiment implemented and seed-calibrated.** `internal/judge` calls JEV through OpenRouter's typed System One API and runs after the deterministic gates in `-judge=enforce` mode; `-judge=auto` keeps it active in sandbox/test sessions when the semantic compiler and a key are configured. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-judge path. The Phase 5 litmus remains green. Real-proposal calibration is still required before accepting ADR-0001. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 6 experiment implemented and seed-calibrated.** `internal/judge` calls JEV through OpenRouter's typed System One API and is mandatory whenever the semantic compiler is enabled. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-judge path. The Phase 5 litmus remains green. Real-proposal calibration is still required before accepting ADR-0001. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -135,10 +135,10 @@ The optional advisory judge runs after `flatc` and before commit:
 
 ```bash
 export OPENROUTER_API_KEY=...
-./bin/boundary-mcp -llm-model ... -judge=enforce
+./bin/boundary-mcp -llm-model ...
 ```
 
-It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. `-judge=off` is the deterministic default; `-judge=auto` enables enforce when the semantic compiler is configured and a key is available; `-judge=enforce` forces it. `sandbox-run` uses `auto` by default, so sandbox sessions exercise the judge when the compiler is configured. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
+It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. The judge is mandatory whenever the semantic compiler is enabled: startup fails if no OpenRouter key resolves. There is no product off switch; unit tests use a fake judge. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
 
 The calibrated defaults are `-judge-review-at 0.40` and `-judge-reject-at 0.70`. Run the labeled benchmark with:
 
@@ -183,7 +183,7 @@ Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` 
 
 - [Architecture specification](docs/ARCHITECTURE.md) — topology, contracts, tool specs, isolation model, and roadmap.
 - [Litmus example](examples/litmus/README.md) — two-actor acceptance fixture and hidden suites.
-- [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — proposed JEV / System One layer; not part of the current design.
+- [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — implemented Phase 6 judge; mandatory with the semantic compiler.
 - [ADR index](docs/adr/README.md) — conventions and decision history.
 
 ## Roadmap

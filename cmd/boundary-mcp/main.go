@@ -50,7 +50,6 @@ func main() {
 		llmBaseURL    = flag.String("llm-base-url", envOr("BOUNDARY_LLM_BASE_URL", ""), "OpenAI-compatible API base URL")
 		llmAPIKey     = flag.String("llm-api-key", envOr("BOUNDARY_LLM_API_KEY", ""), "API key for the LLM provider")
 		llmModel      = flag.String("llm-model", envOr("BOUNDARY_LLM_MODEL", ""), "model used by the semantic compiler")
-		judgeMode     = flag.String("judge", envOr("BOUNDARY_JUDGE", "off"), "semantic judge mode: off, auto, or enforce")
 		judgeBaseURL  = flag.String("judge-base-url", envOr("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"), "System One API base URL")
 		judgeAPIKey   = flag.String("judge-api-key", envOr("OPENROUTER_API_KEY", ""), "OpenRouter API key for JEV")
 		judgeModel    = flag.String("judge-model", envOr("JUDGE_MODEL", "typesafe/jev-1.14"), "JEV model ID")
@@ -69,7 +68,7 @@ func main() {
 	comp, err := newCompiler(
 		*governanceDir, *sdkOut,
 		*llmBaseURL, *llmAPIKey, *llmModel,
-		*judgeMode, *judgeBaseURL, *judgeAPIKey, *judgeModel,
+		*judgeBaseURL, *judgeAPIKey, *judgeModel,
 		*judgeReviewAt, *judgeRejectAt,
 	)
 	if err != nil {
@@ -123,22 +122,10 @@ func main() {
 	}
 }
 
-func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judgeBaseURL, judgeAPIKey, judgeModel string, judgeReviewAt, judgeRejectAt float64) (*compiler.Compiler, error) {
-	rawMode := strings.ToLower(strings.TrimSpace(judgeMode))
-	if rawMode == "" {
-		rawMode = "off"
-	}
-	switch rawMode {
-	case "off", "auto", "enforce":
-	default:
-		return nil, fmt.Errorf("unknown judge mode %q (want off, auto or enforce)", judgeMode)
-	}
-
+func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeBaseURL, judgeAPIKey, judgeModel string, judgeReviewAt, judgeRejectAt float64) (*compiler.Compiler, error) {
 	modelConfigured := strings.TrimSpace(model) != ""
-	if rawMode == "enforce" && !modelConfigured {
-		return nil, errors.New("judge=enforce requires the semantic compiler (-llm-model)")
-	}
 	if !modelConfigured {
+		// No semantic compiler means no proposal or sync path to judge.
 		return nil, nil
 	}
 	if strings.TrimSpace(baseURL) == "" {
@@ -150,26 +137,17 @@ func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judge
 		return nil, err
 	}
 
-	mode := compiler.JudgeOff
-	var semanticJudge judge.Judge
-	if rawMode == "enforce" || rawMode == "auto" {
-		key := judge.ResolveAPIKey(judgeAPIKey)
-		if key == "" {
-			if rawMode == "enforce" {
-				return nil, errors.New("judge=enforce requires -judge-api-key, OPENROUTER_API_KEY, or opencode auth")
-			}
-		} else {
-			jev, err := judge.NewOpenRouter(judge.OpenRouterOptions{
-				BaseURL: judgeBaseURL,
-				APIKey:  key,
-				Model:   judgeModel,
-			})
-			if err != nil {
-				return nil, err
-			}
-			semanticJudge = judge.NewCached(jev, jev.Model())
-			mode = compiler.JudgeEnforce
-		}
+	key := judge.ResolveAPIKey(judgeAPIKey)
+	if strings.TrimSpace(key) == "" {
+		return nil, errors.New("semantic compiler requires the JEV judge: set -judge-api-key, OPENROUTER_API_KEY, or opencode auth")
+	}
+	jev, err := judge.NewOpenRouter(judge.OpenRouterOptions{
+		BaseURL: judgeBaseURL,
+		APIKey:  key,
+		Model:   judgeModel,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	var targets []compiler.SDKTarget
@@ -184,8 +162,8 @@ func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judge
 		GovernanceDir: governanceDir,
 		LLM:           client,
 		SDKTargets:    targets,
-		Judge:         semanticJudge,
-		JudgeMode:     mode,
+		Judge:         judge.NewCached(jev, jev.Model()),
+		JudgeMode:     compiler.JudgeEnforce,
 		JudgePolicy: judge.Policy{
 			ReviewAt: judgeReviewAt,
 			RejectAt: judgeRejectAt,

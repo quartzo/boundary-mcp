@@ -14,7 +14,6 @@
 #   BOUNDARY_MCP_BIN    boundary-mcp binary (default: $BOUNDARY_ROOT/bin/boundary-mcp)
 #   BOUNDARY_MCP_ADDR   HTTP listen address (default: 127.0.0.1:0 = ephemeral port)
 #   BOUNDARY_DRY_RUN    when non-empty, print the plan and exit
-#   BOUNDARY_JUDGE      off, auto, or enforce (default: auto)
 set -euo pipefail
 
 usage() {
@@ -92,7 +91,6 @@ else
     -transport http \
     -addr "${BOUNDARY_MCP_ADDR:-127.0.0.1:0}" \
     -token "$TOKEN" \
-    -judge "${BOUNDARY_JUDGE:-auto}" \
     -governance "$ROOT_DIR/governance" \
     -sdk /sdk \
     -sdk-out "$ROOT_DIR/sdk" \
