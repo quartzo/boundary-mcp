@@ -1,0 +1,11 @@
+{
+  "name": "intent-mismatch",
+  "actor": "actor_ingest",
+  "intent": "add requested_at to EnrichRequest",
+  "purpose_before": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests.\n2. **actor_enrich** (Receiver): answers requests.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n",
+  "purpose_after": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests.\n2. **actor_enrich** (Receiver): answers requests with a friendlier display name.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n",
+  "protocol_before": "namespace litmus;\n\ntable EnrichResponse {\n  document_id:string;\n  display_name:string;\n}\n\nroot_type EnrichResponse;\n",
+  "protocol_after": "namespace litmus;\n\ntable EnrichResponse {\n  document_id:string;\n  display_name:string;\n  display_name_short:string (id: 2);\n}\n\nroot_type EnrichResponse;\n",
+  "flatc_status": "pass",
+  "want": "reject"
+}

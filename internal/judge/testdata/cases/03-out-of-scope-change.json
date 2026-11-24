@@ -1,0 +1,11 @@
+{
+  "name": "out-of-scope-change",
+  "actor": "actor_ingest",
+  "intent": "add requested_at to EnrichRequest",
+  "purpose_before": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests.\n2. **actor_enrich** (Receiver): answers requests.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n",
+  "purpose_after": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests.\n2. **actor_enrich** (Receiver): answers requests with a new billing tier.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n- **INV-02:** actor_enrich must always return a billing_tier.\n",
+  "protocol_before": "namespace litmus;\n\ntable EnrichRequest {\n  correlation_id:string;\n}\n\ntable EnrichResponse {\n  document_id:string;\n}\n\nroot_type EnrichRequest;\n",
+  "protocol_after": "namespace litmus;\n\ntable EnrichRequest {\n  correlation_id:string;\n}\n\ntable EnrichResponse {\n  document_id:string;\n  billing_tier:string;\n}\n\nroot_type EnrichRequest;\n",
+  "flatc_status": "pass",
+  "want": "reject"
+}

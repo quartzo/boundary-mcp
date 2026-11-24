@@ -330,7 +330,7 @@ The launcher:
 
 ### Proposed (not part of the MVP): Advisory Semantic Judge (ADR-0001)
 
-A proposed Phase 6 experiment adds an **advisory** semantic judge (JEV / System One) between the LLM proposal and the deterministic gates. It would catch semantic drift that `flatc` cannot see, triage harness counterexamples and score litmus reconstructions with cheap calibrated judgments. It must never replace `flatc --conform` or the harness as the contract oracle. See [ADR-0001](adr/0001-advisory-semantic-judge.md).
+A Phase 6 experiment adds an **advisory** semantic judge (JEV / System One via OpenRouter's typed System One API) between the LLM proposal and the deterministic gates. It catches semantic drift that `flatc` cannot see, triages harness counterexamples and scores litmus reconstructions with cheap calibrated judgments. It runs in `enforce` mode in the experiment because there is no production traffic, and it must never replace `flatc --conform` or the harness as the contract oracle. See [ADR-0001](adr/0001-advisory-semantic-judge.md).
 
 ---
 

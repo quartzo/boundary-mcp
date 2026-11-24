@@ -26,6 +26,20 @@ Add an **advisory semantic judge** as an optional Phase 6 layer:
 
 The judge is never the contract oracle. A `flatc` failure is always a rejection, regardless of the judge. A judge signal can add an escalation or a diagnostic, but it cannot approve a contract that deterministic gates reject.
 
+### Transport
+
+JEV is reached through **OpenRouter's typed System One endpoint**, so the project reuses its existing OpenRouter account and API key:
+
+- `POST https://openrouter.ai/api/v1/systemone`
+- `Authorization: Bearer $OPENROUTER_API_KEY`
+- model pinned to `typesafe/jev-1.14` (or the `jev-latest` alias during exploration)
+
+OpenRouter preserves the TypeSafe request/response shape (`state`, `questions`, `answers`, `usage`) and additionally returns `usage.cost`, which the benchmark records. The client caches verdicts by the canonical state hash.
+
+### Rollout
+
+The project has no production traffic. The Phase 6 experiment runs in **enforce** mode from the start; a record-only mode exists only as a debugging aid for the benchmark. The deterministic gates and the `judge=off` switch are the safety net, so there is no reason to stage a shadow rollout.
+
 ### Candidate rules for proposals
 
 - `removed_or_renamed_field`: the proposal removes or renames an existing field instead of deprecating it.
@@ -34,6 +48,7 @@ The judge is never the contract oracle. A `flatc` failure is always a rejection,
 - `intent_mismatch`: the `protocol.fbs`/`purpose.md` diff does not address the declared intent.
 - `purpose_protocol_drift`: `purpose.md` and `protocol.fbs` describe different behavior.
 - `unsafe_optionality`: a field becomes optional or loses validation in a way the purpose does not justify.
+- `invented_scope`: a new actor, message or invariant appears that is unrelated to the intent and existing purpose.
 
 Each rule is one question with explicit true/false criteria. Rules are decomposed so a fired signal names the problem.
 
@@ -41,7 +56,7 @@ Each rule is one question with explicit true/false criteria. Rules are decompose
 
 - `flatc` rejects → reject; forward the `flatc` diagnostic unchanged.
 - `flatc` accepts and every judge rule has `P(rule broken) < 0.30` → accept.
-- `flatc` accepts and any judge rule has `P(rule broken) > 0.70` → escalate to a reasoning model or human review.
+- `flatc` accepts and any judge rule has `P(rule broken) ≥ 0.70` → reject or escalate to a reasoning model or human review.
 - Otherwise → review queue.
 
 Thresholds are starting points and must be calibrated on the project's own data. Probabilities are logged with the proposal history.
@@ -55,7 +70,7 @@ Thresholds are starting points and must be calibrated on the project's own data.
 
 ## Experiment plan
 
-**Dataset.** At least 100 labeled proposals spanning compatible additions, breaking changes, deprecated fields, invariant removal, out-of-scope edits, intent mismatch and no-op changes. Labels include the `flatc` outcome and the desired semantic verdict.
+**Dataset.** At least 100 labeled proposals spanning compatible additions, breaking changes, deprecated fields, invariant removal, out-of-scope edits, intent mismatch and no-op changes. Labels include the `flatc` outcome and the desired semantic verdict. Cases are JSON files; `cmd/judge-eval` loads a directory of them and prints decisions, confusion counts, false allows, false escalations, p95 latency and `usage.cost`.
 
 **Metrics.**
 
@@ -73,7 +88,7 @@ Thresholds are starting points and must be calibrated on the project's own data.
 - p95 judge latency ≤ 500 ms and judge cost < 5% of the reasoning-model call it replaces.
 - Thresholds and labels are reproducible and stored with the evaluation.
 
-**Rollback.** The judge is behind configuration and can be disabled without changing the compiler or harness. If the experiment fails, this ADR is marked `Rejected` and the system keeps the deterministic-only flow.
+**Rollback.** The judge is behind configuration (`judge=off`) and can be disabled without changing the compiler or harness. If the experiment fails, this ADR is marked `Rejected` and the system keeps the deterministic-only flow.
 
 ## Consequences
 
@@ -88,7 +103,8 @@ Thresholds are starting points and must be calibrated on the project's own data.
 
 - New optional external dependency and credential to manage.
 - Thresholds require domain calibration; probabilities are not certainty.
-- Governance text leaves the host for a third-party service. The LLM provider already receives it during proposal generation; this adds another processor.
+- Governance text leaves the host for a third-party service (OpenRouter / TypeSafe). The LLM provider already receives it during proposal generation; this adds another processor.
+- A provider outage or rate limit can block proposals in enforce mode. The judge client fails closed; `judge=off` is the escape hatch.
 - Risk that operators treat a typed answer as a hard gate.
 
 ## Alternatives considered
@@ -100,6 +116,9 @@ Thresholds are starting points and must be calibrated on the project's own data.
 
 ## References
 
+- [OpenRouter System One / TypeSafe SDK guide](https://openrouter.ai/docs/guides/community/typesafe-sdk)
+- [OpenRouter TypeSafe models](https://openrouter.ai/typesafe)
+- [OpenRouter Go SystemOne SDK](https://openrouter.ai/docs/client-sdks/go/sdks/systemone/README)
 - [System One](https://docs.typesafe.ai/concepts/system-one.md)
 - [Confidence](https://docs.typesafe.ai/confidence.md)
 - [SDE cascade](https://docs.typesafe.ai/cookbooks/sde_cascade.md)

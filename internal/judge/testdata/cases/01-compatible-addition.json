@@ -1,0 +1,11 @@
+{
+  "name": "compatible-addition",
+  "actor": "actor_ingest",
+  "intent": "add requested_at to EnrichRequest and document it as INV-02",
+  "purpose_before": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests.\n2. **actor_enrich** (Receiver): answers requests.\n\n## Protocol & State Flow\n- **Transition 1:** actor_ingest sends EnrichRequest.\n- **Transition 2:** actor_enrich replies.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n",
+  "purpose_after": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests.\n2. **actor_enrich** (Receiver): answers requests.\n\n## Protocol & State Flow\n- **Transition 1:** actor_ingest sends EnrichRequest.\n- **Transition 2:** actor_enrich replies.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n- **INV-02:** requested_at must be set by the emitter.\n",
+  "protocol_before": "namespace litmus;\n\ntable EnrichRequest {\n  correlation_id:string;\n}\n\nroot_type EnrichRequest;\n",
+  "protocol_after": "namespace litmus;\n\ntable EnrichRequest {\n  correlation_id:string;\n  requested_at:ulong (id: 1);\n}\n\nroot_type EnrichRequest;\n",
+  "flatc_status": "pass",
+  "want": "allow"
+}

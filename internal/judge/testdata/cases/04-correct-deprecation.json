@@ -1,0 +1,11 @@
+{
+  "name": "correct-deprecation",
+  "actor": "actor_ingest",
+  "intent": "replace legacy_id with document_id while keeping backwards compatibility",
+  "purpose_before": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n",
+  "purpose_after": "# System: Entity Enrichment Pipeline\n\n## Actors\n1. **actor_ingest** (Emitter): sends requests with document_id; legacy_id is deprecated.\n\n## Boundary Invariants (Hard Contracts)\n- **INV-01:** correlation_id must be a non-empty UUIDv7.\n- **INV-02:** document_id must contain exactly 14 numeric digits.\n",
+  "protocol_before": "namespace litmus;\n\ntable EnrichRequest {\n  correlation_id:string;\n  legacy_id:string;\n}\n\nroot_type EnrichRequest;\n",
+  "protocol_after": "namespace litmus;\n\ntable EnrichRequest {\n  correlation_id:string;\n  legacy_id:string (deprecated);\n  document_id:string (id: 2);\n}\n\nroot_type EnrichRequest;\n",
+  "flatc_status": "pass",
+  "want": "allow"
+}

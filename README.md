@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 5b complete for `actor_enrich`.** `examples/litmus/` holds the two-actor boundary, contract, hidden suites and `make litmus`. The `actor_enrich` implementation was wiped and reconstructed by a sandboxed `opencode` session using only the boundary context (purpose, protocol and read-only SDK); the reconstructed actor passes the hidden suite. Repeating the reconstruction for `actor_ingest` remains optional. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 6 experiment implemented.** `internal/judge` calls JEV through OpenRouter's typed System One API and runs after the deterministic gates in `-judge=enforce` mode; `cmd/judge-eval` runs the labeled proposal benchmark. The Phase 5 litmus (including the sandboxed `actor_enrich` reconstruction) remains green. Calibration on the labeled proposal set is the next step. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -73,12 +73,14 @@ The target layout (see the architecture document for details):
 ├── bin/                     # build output (gitignored)
 ├── cmd/
 │   ├── boundary-mcp/        # MCP server (stdio / loopback HTTP)
+│   ├── judge-eval/          # labeled proposal benchmark for JEV
 │   └── sandbox-run/         # bwrap launcher + opencode.json template
 └── internal/
     ├── compiler/            # LLM semantic compiler, flatc gates, history
     ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
     ├── governance/          # purpose.md parser and actor filtering
     ├── harness/             # .bfbs reflection, frame builder, verifier engines
+    ├── judge/               # advisory JEV / System One judge
     ├── llm/                 # OpenAI-compatible structured-output client
     └── mcp/                 # MCP tools, handlers, HTTP auth
 ```
@@ -90,6 +92,7 @@ The target layout (see the architecture document for details):
 - **Bubblewrap** (`bwrap`) on Linux, for sandboxed agent sessions
 - **opencode**, for the agent-facing workflow
 - An **OpenAI-compatible LLM endpoint** (optional), for the semantic compiler
+- An **OpenRouter API key** (optional), for the JEV semantic judge
 
 ## Development
 
@@ -125,6 +128,25 @@ make build
 ```
 
 The LLM may only propose; `flatc --binary --schema` and `flatc --conform` decide whether a change is valid. Committed changes are written atomically and snapshotted under `governance/history/<timestamp>_<actor>/` with `diff.patch` and `meta.json`. Without an LLM configured, the tool reports that the compiler is unavailable.
+
+## Semantic judge (experiment)
+
+The optional advisory judge runs after `flatc` and before commit:
+
+```bash
+export OPENROUTER_API_KEY=...
+./bin/boundary-mcp -llm-model ... -judge=enforce
+```
+
+It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. `-judge=off` is the default; `judge=enforce` requires the semantic compiler and an OpenRouter key.
+
+Run the labeled benchmark with:
+
+```bash
+go run ./cmd/judge-eval -cases internal/judge/testdata/cases
+```
+
+See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md).
 
 ## Harness
 

@@ -121,18 +121,19 @@ func diffArtifacts(before, after Artifacts) (string, error) {
 }
 
 type commitMeta struct {
-	Timestamp         string   `json:"timestamp"`
-	Actor             string   `json:"actor"`
-	Intent            string   `json:"intent"`
-	Summary           string   `json:"summary,omitempty"`
-	Direction         string   `json:"direction"`
-	Model             string   `json:"model,omitempty"`
-	AffectsInvariants []string `json:"affects_invariants,omitempty"`
-	Files             []string `json:"files"`
-	Patch             string   `json:"patch"`
+	Timestamp         string     `json:"timestamp"`
+	Actor             string     `json:"actor"`
+	Intent            string     `json:"intent"`
+	Summary           string     `json:"summary,omitempty"`
+	Direction         string     `json:"direction"`
+	Model             string     `json:"model,omitempty"`
+	AffectsInvariants []string   `json:"affects_invariants,omitempty"`
+	Files             []string   `json:"files"`
+	Patch             string     `json:"patch"`
+	Judge             *judgeMeta `json:"judge,omitempty"`
 }
 
-func (c *Compiler) writeHistory(in applyInput, changed []string, diff string, now time.Time) (string, string, error) {
+func (c *Compiler) writeHistory(in applyInput, changed []string, diff string, now time.Time, judgeRecord *judgeMeta) (string, string, error) {
 	stamp := now.UTC().Format("20060102T150405.000000000Z")
 	dir := filepath.Join(c.opts.GovernanceDir, "history", stamp+"_"+sanitizeName(in.actor))
 
@@ -165,6 +166,7 @@ func (c *Compiler) writeHistory(in applyInput, changed []string, diff string, no
 		AffectsInvariants: in.affects,
 		Files:             changed,
 		Patch:             "diff.patch",
+		Judge:             judgeRecord,
 	}
 	metaJSON, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {

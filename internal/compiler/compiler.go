@@ -15,6 +15,7 @@ import (
 
 	"boundary-mcp/internal/fbs"
 	"boundary-mcp/internal/governance"
+	"boundary-mcp/internal/judge"
 	"boundary-mcp/internal/llm"
 	"boundary-mcp/internal/mcp"
 )
@@ -23,6 +24,16 @@ import (
 type LLM interface {
 	CompleteJSON(ctx context.Context, req llm.Request) (*llm.Response, error)
 }
+
+// JudgeMode controls the advisory semantic judge.
+type JudgeMode string
+
+const (
+	// JudgeOff disables the judge.
+	JudgeOff JudgeMode = "off"
+	// JudgeEnforce applies the judge verdict before committing.
+	JudgeEnforce JudgeMode = "enforce"
+)
 
 // SDKTarget is a language/directory pair regenerated after a commit.
 type SDKTarget struct {
@@ -38,6 +49,10 @@ type Options struct {
 	Flatc *fbs.Compiler
 	// LLM is required.
 	LLM LLM
+	// Judge is the optional advisory semantic judge.
+	Judge judge.Judge
+	// JudgeMode defaults to JudgeOff.
+	JudgeMode JudgeMode
 	// Clock is injectable for deterministic tests. Defaults to time.Now.
 	Clock func() time.Time
 	// SDKTargets are regenerated after a successful commit.
@@ -69,6 +84,17 @@ func New(opts Options) (*Compiler, error) {
 	}
 	if opts.LLM == nil {
 		return nil, errors.New("compiler: LLM is required")
+	}
+	if opts.JudgeMode == "" {
+		opts.JudgeMode = JudgeOff
+	}
+	switch opts.JudgeMode {
+	case JudgeOff, JudgeEnforce:
+	default:
+		return nil, fmt.Errorf("compiler: unknown judge mode %q", opts.JudgeMode)
+	}
+	if opts.JudgeMode == JudgeEnforce && opts.Judge == nil {
+		return nil, errors.New("compiler: judge is required in enforce mode")
 	}
 	if opts.Flatc == nil {
 		opts.Flatc = fbs.NewCompiler("")
@@ -330,13 +356,41 @@ func (c *Compiler) apply(ctx context.Context, in applyInput) (*mcp.ProposalResul
 		return &mcp.ProposalResult{Status: "unchanged"}, nil
 	}
 
+	var judgeRecord *judgeMeta
+	if c.opts.JudgeMode == JudgeEnforce && c.opts.Judge != nil && in.direction == directionPropose {
+		assessment, err := c.opts.Judge.Evaluate(ctx, judge.Input{
+			Actor:              in.actor,
+			Intent:             in.intent,
+			AffectedInvariants: in.affects,
+			PurposeBefore:      in.before.Purpose,
+			PurposeAfter:       in.after.Purpose,
+			ProtocolBefore:     in.before.Protocol,
+			ProtocolAfter:      in.after.Protocol,
+			StateMachineBefore: in.before.StateMachine,
+			StateMachineAfter:  in.after.StateMachine,
+			FlatcStatus:        "pass",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("compiler: judge: %w", err)
+		}
+
+		verdict := judge.DefaultPolicy().Decide(assessment)
+		judgeRecord = newJudgeMeta(assessment, verdict)
+		switch verdict.Decision {
+		case judge.Reject:
+			return rejectedResult("semantic judge: " + verdict.Summary()), nil
+		case judge.Review:
+			return escalatedResult("semantic judge: " + verdict.Summary()), nil
+		}
+	}
+
 	diff, err := diffArtifacts(in.before, in.after)
 	if err != nil {
 		return nil, fmt.Errorf("compiler: diff: %w", err)
 	}
 
 	now := c.opts.Clock()
-	historyDir, patchPath, err := c.writeHistory(in, changed, diff, now)
+	historyDir, patchPath, err := c.writeHistory(in, changed, diff, now, judgeRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -371,4 +425,39 @@ func (c *Compiler) apply(ctx context.Context, in applyInput) (*mcp.ProposalResul
 
 func rejectedResult(diagnostics string) *mcp.ProposalResult {
 	return &mcp.ProposalResult{Status: "rejected", Diagnostics: diagnostics}
+}
+
+func escalatedResult(diagnostics string) *mcp.ProposalResult {
+	return &mcp.ProposalResult{Status: "escalated", Diagnostics: diagnostics}
+}
+
+type judgeMeta struct {
+	Decision       string          `json:"decision"`
+	MaxRule        string          `json:"max_rule,omitempty"`
+	MaxProbability float64         `json:"max_probability"`
+	Findings       []judge.Finding `json:"findings,omitempty"`
+	Model          string          `json:"model,omitempty"`
+	InputTokens    int             `json:"input_tokens,omitempty"`
+	OutputTokens   int             `json:"output_tokens,omitempty"`
+	CostUSD        float64         `json:"cost_usd,omitempty"`
+	LatencyMS      int64           `json:"latency_ms,omitempty"`
+	Cached         bool            `json:"cached,omitempty"`
+}
+
+func newJudgeMeta(assessment *judge.Assessment, verdict judge.Verdict) *judgeMeta {
+	if assessment == nil {
+		return nil
+	}
+	return &judgeMeta{
+		Decision:       string(verdict.Decision),
+		MaxRule:        verdict.MaxRule,
+		MaxProbability: verdict.MaxProbability,
+		Findings:       verdict.Findings,
+		Model:          assessment.Model,
+		InputTokens:    assessment.InputTokens,
+		OutputTokens:   assessment.OutputTokens,
+		CostUSD:        assessment.CostUSD,
+		LatencyMS:      assessment.Latency.Milliseconds(),
+		Cached:         assessment.Cached,
+	}
 }

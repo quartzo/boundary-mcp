@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"boundary-mcp/internal/fbs"
+	"boundary-mcp/internal/judge"
 	"boundary-mcp/internal/llm"
 	"boundary-mcp/internal/mcp"
 )
@@ -320,6 +321,162 @@ func TestProposeRegeneratesSDKs(t *testing.T) {
 	if len(generated) == 0 {
 		t.Fatal("no Go bindings were generated")
 	}
+}
+
+func TestProposeJudgeAllows(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeLLM{responses: map[string]string{
+		"contract_evolution": proposalJSON(t, basePurpose, addField(baseProtocol, "requested_at:ulong (id: 2);"), baseState),
+	}}
+	c, dir := newTestCompiler(t, fake)
+
+	semanticJudge := &fakeJudge{assessment: &judge.Assessment{
+		Rules: map[string]float64{"dropped_invariant": 0.05},
+		Model: "test-model",
+	}}
+	c.opts.Judge = semanticJudge
+	c.opts.JudgeMode = JudgeEnforce
+
+	res, err := c.Propose(context.Background(), mcp.ProposalRequest{
+		ActorName:         "actor_ingest",
+		IntentDescription: "add requested_at",
+	})
+	if err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+	if res.Status != "committed" {
+		t.Fatalf("status = %q, diagnostics = %q", res.Status, res.Diagnostics)
+	}
+	if semanticJudge.calls != 1 {
+		t.Fatalf("judge calls = %d, want 1", semanticJudge.calls)
+	}
+	if semanticJudge.last.Actor != "actor_ingest" || semanticJudge.last.Intent != "add requested_at" {
+		t.Fatalf("judge input = %+v", semanticJudge.last)
+	}
+
+	entries := historyEntries(t, dir)
+	if len(entries) != 1 {
+		t.Fatalf("history entries = %v", entries)
+	}
+	meta := readFile(t, filepath.Join(dir, "history", entries[0], "meta.json"))
+	if !strings.Contains(meta, `"judge"`) || !strings.Contains(meta, `"decision": "allow"`) {
+		t.Fatalf("meta does not contain the judge verdict: %s", meta)
+	}
+}
+
+func TestProposeJudgeRejects(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeLLM{responses: map[string]string{
+		"contract_evolution": proposalJSON(t, basePurpose, addField(baseProtocol, "requested_at:ulong (id: 2);"), baseState),
+	}}
+	c, dir := newTestCompiler(t, fake)
+
+	semanticJudge := &fakeJudge{assessment: &judge.Assessment{
+		Rules: map[string]float64{"dropped_invariant": 0.85},
+		Model: "test-model",
+	}}
+	c.opts.Judge = semanticJudge
+	c.opts.JudgeMode = JudgeEnforce
+
+	res, err := c.Propose(context.Background(), mcp.ProposalRequest{
+		ActorName:         "actor_ingest",
+		IntentDescription: "add requested_at",
+	})
+	if err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+	if res.Status != "rejected" {
+		t.Fatalf("status = %q", res.Status)
+	}
+	if !strings.Contains(res.Diagnostics, "dropped_invariant") {
+		t.Fatalf("diagnostics = %q", res.Diagnostics)
+	}
+	if len(historyEntries(t, dir)) != 0 {
+		t.Fatal("rejected proposal wrote history")
+	}
+	if got := readFile(t, filepath.Join(dir, "protocol.fbs")); got != baseProtocol {
+		t.Fatal("rejected proposal modified protocol.fbs")
+	}
+}
+
+func TestProposeJudgeReviews(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeLLM{responses: map[string]string{
+		"contract_evolution": proposalJSON(t, basePurpose, addField(baseProtocol, "requested_at:ulong (id: 2);"), baseState),
+	}}
+	c, _ := newTestCompiler(t, fake)
+
+	c.opts.Judge = &fakeJudge{assessment: &judge.Assessment{
+		Rules: map[string]float64{"intent_mismatch": 0.50},
+	}}
+	c.opts.JudgeMode = JudgeEnforce
+
+	res, err := c.Propose(context.Background(), mcp.ProposalRequest{
+		ActorName:         "actor_ingest",
+		IntentDescription: "add requested_at",
+	})
+	if err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+	if res.Status != "escalated" {
+		t.Fatalf("status = %q, want escalated", res.Status)
+	}
+	if !strings.Contains(res.Diagnostics, "intent_mismatch") {
+		t.Fatalf("diagnostics = %q", res.Diagnostics)
+	}
+}
+
+func TestProposeJudgeError(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeLLM{responses: map[string]string{
+		"contract_evolution": proposalJSON(t, basePurpose, addField(baseProtocol, "requested_at:ulong (id: 2);"), baseState),
+	}}
+	c, _ := newTestCompiler(t, fake)
+
+	c.opts.Judge = &fakeJudge{err: errors.New("provider down")}
+	c.opts.JudgeMode = JudgeEnforce
+
+	if _, err := c.Propose(context.Background(), mcp.ProposalRequest{
+		ActorName:         "actor_ingest",
+		IntentDescription: "add requested_at",
+	}); err == nil {
+		t.Fatal("Propose returned nil error when the judge failed")
+	}
+}
+
+func TestNewEnforceRequiresJudge(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "purpose.md"), basePurpose)
+	writeTestFile(t, filepath.Join(dir, "protocol.fbs"), baseProtocol)
+	writeTestFile(t, filepath.Join(dir, "state_machine.json"), baseState)
+
+	_, err := New(Options{
+		GovernanceDir: dir,
+		LLM:           &fakeLLM{},
+		JudgeMode:     JudgeEnforce,
+	})
+	if err == nil {
+		t.Fatal("New with enforce mode and no judge returned nil error")
+	}
+}
+
+type fakeJudge struct {
+	calls      int
+	last       judge.Input
+	assessment *judge.Assessment
+	err        error
+}
+
+func (f *fakeJudge) Evaluate(_ context.Context, in judge.Input) (*judge.Assessment, error) {
+	f.calls++
+	f.last = in
+	return f.assessment, f.err
 }
 
 func TestProposeLLMError(t *testing.T) {
