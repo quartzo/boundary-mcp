@@ -240,6 +240,29 @@ When a node in the topology represents an external service that does not nativel
 - `actors/actor_external_crm` houses strictly a thin **Boundary Adapter** (Anti-Corruption Layer).
 - `boundary-mcp` verifies this adapter against a local HTTP/gRPC mock simulating real upstream payloads and fault modes, guaranteeing that translation into internal FlatBuffers is 100% deterministic and free of external schema leakage.
 
+### 6.4 Hidden Test Suites (`governance/hidden_tests/<actor>.json`)
+
+`verify_actor_behavior` loads a trusted suite per actor:
+
+```json
+{
+  "mode": "server",
+  "schema": "protocol.bfbs",
+  "response_table": "EnrichResponse",
+  "build": "go build -o bin/actor ./...",
+  "run": ["./bin/actor", "--socket", "{socket}"],
+  "timeout_ms": 2000,
+  "seeds": [
+    {"table": "EnrichRequest", "values": {"document_id": "12345678901234"}}
+  ]
+}
+```
+
+- Frames are **built dynamically** from `.bfbs`: suites carry field values, not base64 payloads.
+- `mode: "server"` runs the Harness Client; `mode: "client"` runs the Reference Mock Peer with `scenarios` and declarative checks (`regex`, `min`, `max`, `equals`).
+- The actor receives `BOUNDARY_SOCKET`, and `{socket}` placeholders are substituted in `run`.
+- `build` and `run` are trusted governance values. `entrypoint_cmd` from the agent is only a fallback; pin `build` in the suite so the agent cannot execute arbitrary host commands.
+
 ---
 
 ## 7. Physical Environment Isolation
@@ -291,9 +314,10 @@ The launcher:
 
 ### Phase 4: Boundary Test Inducer (`internal/harness`)
 
-- [x] Implement `.bfbs` reflection (tables, fields, types, enums, defaults) and structural mutation generation (boundary scalars, invalid UTF-8, truncation, corrupted offsets), with `pgregory.net/rapid` property tests.
+- [x] Implement `.bfbs` reflection (tables, fields, types, enums, defaults), a dynamic FlatBuffer builder for seed/response frames, and structural mutation generation (boundary scalars, invalid UTF-8, truncation, corrupted offsets), with `pgregory.net/rapid` property tests.
 - [x] Implement the Reference Mock Peer (state-machine mock) used to verify client actors, plus the Harness Client for receiver actors, over length-prefixed Unix-socket framing.
-- [ ] Wire the harness into `verify_actor_behavior` with a suite/run convention (actor launch command, seed frames and scripted peer scenarios).
+- [x] Wire the harness into `verify_actor_behavior` with a JSON suite/run convention (`governance/hidden_tests/<actor>.json`), dynamic seed frames and scripted peer scenarios.
+- [ ] Sandbox the verifier's build/run subprocesses (for example with `bwrap`) before using it on untrusted actor code.
 
 ### Phase 5: Litmus Test (Thesis Validation)
 

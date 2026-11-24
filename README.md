@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 4 core complete.** `internal/harness` parses `.bfbs` reflection (tables, fields, types, enums), validates payloads, generates structural mutations and provides two verification engines: `HarnessClient` for receiver actors and `ReferenceMockPeer` for emitter actors. The `verify_actor_behavior` MCP tool is not wired yet: it needs a suite/run convention for launching binaries and loading seed frames. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 4 complete.** `internal/harness` parses `.bfbs` reflection, builds and mutates FlatBuffer frames dynamically, and provides two verification engines: `HarnessClient` for receiver actors and `ReferenceMockPeer` for emitter actors. `verify_actor_behavior` is wired through trusted JSON suites under `governance/hidden_tests/`. Verification subprocesses currently run on the host; sandboxing them is the remaining hardening step. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -76,7 +76,7 @@ The target layout (see the architecture document for details):
     ├── compiler/            # LLM semantic compiler, flatc gates, history
     ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
     ├── governance/          # purpose.md parser and actor filtering
-    ├── harness/             # .bfbs reflection, mutation, HarnessClient, mock peer
+    ├── harness/             # .bfbs reflection, frame builder, verifier engines
     ├── llm/                 # OpenAI-compatible structured-output client
     └── mcp/                 # MCP tools, handlers, HTTP auth
 ```
@@ -132,8 +132,24 @@ The LLM may only propose; `flatc --binary --schema` and `flatc --conform` decide
 - `Schema.Validate` and `BoundaryMutations` check frames and generate structural mutations (boundary scalars, invalid UTF-8, truncation, corrupted offsets).
 - `HarnessClient` verifies actors that receive messages: valid seeds must respond, malformed frames may be dropped or answered with a valid buffer, and a closed connection is a failure.
 - `ReferenceMockPeer` verifies actors that emit messages with scripted request/response scenarios, checks, delays and timeout/sequence paths.
+- A dynamic builder turns `.bfbs` metadata plus field values into valid FlatBuffers, so suites never carry base64 payloads.
 
-Property tests in the harness use `pgregory.net/rapid`. The MCP `verify_actor_behavior` tool still needs a suite/run convention (how to launch the actor and where seed frames come from) before it can be wired to these engines.
+Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` loads a trusted suite per actor:
+
+```json
+{
+  "mode": "server",
+  "schema": "protocol.bfbs",
+  "response_table": "EnrichResponse",
+  "build": "go build -o bin/actor ./...",
+  "run": ["./bin/actor", "--socket", "{socket}"],
+  "seeds": [
+    {"table": "EnrichRequest", "values": {"document_id": "12345678901234"}}
+  ]
+}
+```
+
+`mode: "client"` instead runs the Reference Mock Peer with `scenarios` and declarative checks (`regex`, `min`, `max`, `equals`). The verifier resolves actor workspaces with `-actors` (default `actors`) and suites with `-hidden-tests` (default `<governance>/hidden_tests`). `build` and `run` are trusted suite values; pin `build` there instead of relying on the agent-provided `entrypoint_cmd`. Verification subprocesses still run on the host — sandboxing them is the next hardening step.
 
 ## Documentation
 
