@@ -122,8 +122,8 @@ func TestUnavailableDependencies(t *testing.T) {
 		"actor_name":     "actor_ingest",
 		"entrypoint_cmd": "go build ./...",
 	})
-	if !verify.IsError || !strings.Contains(toolText(verify), "Phase 4") {
-		t.Fatalf("verify result = %q (isError=%v), want a Phase 4 error", toolText(verify), verify.IsError)
+	if !verify.IsError || !strings.Contains(toolText(verify), "harness not configured") {
+		t.Fatalf("verify result = %q (isError=%v), want a harness error", toolText(verify), verify.IsError)
 	}
 }
 

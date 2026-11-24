@@ -172,7 +172,7 @@ func (s *Server) handleVerifyActorBehavior(ctx context.Context, req mcpsdk.CallT
 		return mcpsdk.NewToolResultError("entrypoint_cmd is required"), nil
 	}
 	if s.opts.Verifier == nil {
-		return mcpsdk.NewToolResultError("verify_actor_behavior is not available: deterministic harness not configured (Phase 4)"), nil
+		return mcpsdk.NewToolResultError("verify_actor_behavior is not available: deterministic harness not configured"), nil
 	}
 
 	res, err := s.opts.Verifier.Verify(ctx, VerifyRequest{
