@@ -66,6 +66,24 @@ func ParsePurpose(data []byte) *Purpose {
 	return p
 }
 
+// HasActor reports whether actor is listed in the "Actors" section.
+//
+// Mentions elsewhere (for example in the protocol flow) do not count: every
+// actor must be documented with its own entry.
+func (p *Purpose) HasActor(actor string) bool {
+	for _, sec := range p.sections {
+		if !isActorSection(sec.title) {
+			continue
+		}
+		for _, line := range sec.lines {
+			if isListItem(strings.TrimSpace(line)) && mentionsActor(line, actor) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ViewFor returns the subset of purpose.md relevant to actor.
 //
 // The "Actors" section is filtered to entries mentioning the actor, since

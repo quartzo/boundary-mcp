@@ -142,7 +142,7 @@ func (s *Server) handleProposeContractEvolution(ctx context.Context, req mcpsdk.
 		return mcpsdk.NewToolResultError("intent_description is required"), nil
 	}
 	if s.opts.Evolver == nil {
-		return mcpsdk.NewToolResultError("propose_contract_evolution is not available: semantic compiler not configured (Phase 3)"), nil
+		return mcpsdk.NewToolResultError("propose_contract_evolution is not available: semantic compiler not configured (set -llm-model or BOUNDARY_LLM_MODEL)"), nil
 	}
 
 	res, err := s.opts.Evolver.Propose(ctx, ProposalRequest{

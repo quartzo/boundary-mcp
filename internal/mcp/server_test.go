@@ -114,8 +114,8 @@ func TestUnavailableDependencies(t *testing.T) {
 		"actor_name":         "actor_ingest",
 		"intent_description": "need a new field",
 	})
-	if !propose.IsError || !strings.Contains(toolText(propose), "Phase 3") {
-		t.Fatalf("propose result = %q (isError=%v), want a Phase 3 error", toolText(propose), propose.IsError)
+	if !propose.IsError || !strings.Contains(toolText(propose), "semantic compiler not configured") {
+		t.Fatalf("propose result = %q (isError=%v), want a configuration error", toolText(propose), propose.IsError)
 	}
 
 	verify := callTool(t, c, "verify_actor_behavior", map[string]any{

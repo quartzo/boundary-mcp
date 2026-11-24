@@ -89,6 +89,7 @@ else
     -token "$TOKEN" \
     -governance "$ROOT_DIR/governance" \
     -sdk /sdk \
+    -sdk-out "$ROOT_DIR/sdk" \
     -ready-file "$READY_FILE" \
     >"$LOG_FILE" 2>&1 &
   MCP_PID=$!

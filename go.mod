@@ -2,7 +2,10 @@ module boundary-mcp
 
 go 1.27.1
 
-require github.com/mark3labs/mcp-go v1.6.0
+require (
+	github.com/mark3labs/mcp-go v1.6.0
+	github.com/pmezard/go-difflib v1.0.0
+)
 
 require (
 	github.com/google/jsonschema-go v0.4.2 // indirect

@@ -121,6 +121,27 @@ func TestParsePurposeHandlesCRLF(t *testing.T) {
 	}
 }
 
+func TestHasActorRequiresActorsSectionEntry(t *testing.T) {
+	t.Parallel()
+
+	doc := `# System
+
+## Actors
+1. **actor_a** does work.
+
+## Protocol & State Flow
+- actor_b sends a message.
+`
+	p := ParsePurpose([]byte(doc))
+
+	if !p.HasActor("actor_a") {
+		t.Error("HasActor(actor_a) = false")
+	}
+	if p.HasActor("actor_b") {
+		t.Error("HasActor(actor_b) = true, but it is only mentioned in the flow section")
+	}
+}
+
 func TestViewForNoSections(t *testing.T) {
 	t.Parallel()
 
