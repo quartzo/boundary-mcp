@@ -147,8 +147,9 @@ func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judge
 
 	var semanticJudge judge.Judge
 	if mode == compiler.JudgeEnforce {
+		judgeAPIKey = judge.ResolveAPIKey(judgeAPIKey)
 		if strings.TrimSpace(judgeAPIKey) == "" {
-			return nil, errors.New("judge=enforce requires -judge-api-key or OPENROUTER_API_KEY")
+			return nil, errors.New("judge=enforce requires -judge-api-key, OPENROUTER_API_KEY, or opencode auth")
 		}
 		jev, err := judge.NewOpenRouter(judge.OpenRouterOptions{
 			BaseURL: judgeBaseURL,

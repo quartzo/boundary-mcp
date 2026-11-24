@@ -138,13 +138,15 @@ export OPENROUTER_API_KEY=...
 ./bin/boundary-mcp -llm-model ... -judge=enforce
 ```
 
-It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. `-judge=off` is the default; `judge=enforce` requires the semantic compiler and an OpenRouter key.
+It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. `-judge=off` is the default; `judge=enforce` requires the semantic compiler and an OpenRouter key. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
 
 Run the labeled benchmark with:
 
 ```bash
 go run ./cmd/judge-eval -cases internal/judge/testdata/cases
 ```
+
+A five-case smoke run produced 4/5 correct, 0 false allows, 1 false escalation (a deprecation flagged as drift at 0.59), p95 ≈ 432 ms and ≈ $0.00005 per case. This is a smoke test, not calibration.
 
 See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md).
 

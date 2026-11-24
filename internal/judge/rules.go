@@ -43,8 +43,8 @@ var Rules = []Rule{
 	{
 		ID:           "purpose_protocol_drift",
 		Instructions: "Do the updated purpose.md and protocol.fbs describe different behavior?",
-		True:         "A message, field, state or invariant described in purpose_after is absent or contradictory in protocol_after, or vice versa.",
-		False:        "purpose_after and protocol_after describe the same behavior.",
+		True:         "A message, field, state or invariant described as active in purpose_after is absent or contradictory in protocol_after, or vice versa.",
+		False:        "purpose_after and protocol_after describe the same behavior. A field that remains in protocol_after as deprecated, and is described as deprecated in purpose_after, is not drift.",
 	},
 	{
 		ID:           "unsafe_optionality",

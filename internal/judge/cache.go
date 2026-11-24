@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	cacheVersion    = "1"
+	cacheVersion    = "2"
 	defaultCacheMax = 512
 )
 

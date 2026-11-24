@@ -14,7 +14,7 @@ import (
 
 func main() {
 	casesDir := flag.String("cases", "internal/judge/testdata/cases", "directory of labeled case JSON files")
-	apiKey := flag.String("api-key", envOr("OPENROUTER_API_KEY", ""), "OpenRouter API key")
+	apiKey := flag.String("api-key", "", "OpenRouter API key (defaults to OPENROUTER_API_KEY or opencode auth)")
 	baseURL := flag.String("base-url", envOr("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"), "System One base URL")
 	model := flag.String("model", envOr("JUDGE_MODEL", "typesafe/jev-1.14"), "JEV model ID")
 	reviewAt := flag.Float64("review-at", 0.30, "review threshold")
@@ -22,8 +22,9 @@ func main() {
 	timeout := flag.Duration("timeout", 2*time.Minute, "overall timeout")
 	flag.Parse()
 
-	if strings.TrimSpace(*apiKey) == "" {
-		fmt.Fprintln(os.Stderr, "judge-eval: OPENROUTER_API_KEY or -api-key is required")
+	key := judge.ResolveAPIKey(*apiKey)
+	if strings.TrimSpace(key) == "" {
+		fmt.Fprintln(os.Stderr, "judge-eval: set OPENROUTER_API_KEY, -api-key, or opencode auth")
 		os.Exit(2)
 	}
 
@@ -37,7 +38,7 @@ func main() {
 
 	client, err := judge.NewOpenRouter(judge.OpenRouterOptions{
 		BaseURL: *baseURL,
-		APIKey:  *apiKey,
+		APIKey:  key,
 		Model:   *model,
 	})
 	if err != nil {

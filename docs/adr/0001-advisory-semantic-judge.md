@@ -36,6 +36,8 @@ JEV is reached through **OpenRouter's typed System One endpoint**, so the projec
 
 OpenRouter preserves the TypeSafe request/response shape (`state`, `questions`, `answers`, `usage`) and additionally returns `usage.cost`, which the benchmark records. The client caches verdicts by the canonical state hash.
 
+For local development, when `OPENROUTER_API_KEY` is unset, the client reads the OpenRouter key from opencode's auth store (`$XDG_DATA_HOME/opencode/auth.json`, override with `OPENCODE_AUTH_FILE`). Production deployments should set the environment variable.
+
 ### Rollout
 
 The project has no production traffic. The Phase 6 experiment runs in **enforce** mode from the start; a record-only mode exists only as a debugging aid for the benchmark. The deterministic gates and the `judge=off` switch are the safety net, so there is no reason to stage a shadow rollout.
@@ -71,6 +73,8 @@ Thresholds are starting points and must be calibrated on the project's own data.
 ## Experiment plan
 
 **Dataset.** At least 100 labeled proposals spanning compatible additions, breaking changes, deprecated fields, invariant removal, out-of-scope edits, intent mismatch and no-op changes. Labels include the `flatc` outcome and the desired semantic verdict. Cases are JSON files; `cmd/judge-eval` loads a directory of them and prints decisions, confusion counts, false allows, false escalations, p95 latency and `usage.cost`.
+
+**Initial smoke test (2026-11-24).** Five labeled cases through `cmd/judge-eval`: 4/5 correct, 0 false allows, 1 false escalation (`correct-deprecation`, `purpose_protocol_drift` at 0.59), p95 432 ms and $0.00005 per case. This is a smoke test, not calibration.
 
 **Metrics.**
 

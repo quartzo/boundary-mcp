@@ -1,4 +1,4 @@
-.PHONY: build test fmt vet clean litmus litmus-sdk
+.PHONY: build test fmt vet clean litmus litmus-sdk judge-eval
 
 build:
 	go build -o bin/boundary-mcp ./cmd/boundary-mcp
@@ -20,3 +20,6 @@ litmus: litmus-sdk
 
 litmus-sdk:
 	flatc --go -o examples/litmus/sdk/go examples/litmus/governance/protocol.fbs
+
+judge-eval:
+	go run ./cmd/judge-eval -cases internal/judge/testdata/cases
