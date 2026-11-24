@@ -210,7 +210,7 @@ Invoked by the human architect (or a file watcher) whenever `purpose.md` or `pro
 
 ## 6. Deterministic Test Induction and Execution Engine
 
-To ensure black-box actors respect both structural types and temporal semantics, `internal/harness` implements two verification modes driven by `.fbs` reflection and `state_machine.json`.
+To ensure black-box actors respect both structural types and temporal semantics, `internal/harness` implements two verification modes driven by `.fbs` reflection and `state_machine.json`. The package parses `.bfbs` into an in-memory schema, validates payloads, generates structural mutations and exposes a **Harness Client** (receivers) and a **Reference Mock Peer** (emitters) over length-prefixed Unix-socket framing.
 
 ### 6.1 Testing an Actor as Server (Receiver)
 
@@ -291,8 +291,9 @@ The launcher:
 
 ### Phase 4: Boundary Test Inducer (`internal/harness`)
 
-- [ ] Implement property-based test generation using `pgregory.net/rapid` driven by `.fbs` binary schema reflection (`.bfbs` output from `flatc --binary --schema`).
-- [ ] Implement the Reference Mock Peer (state-machine mock) used to verify client actors.
+- [x] Implement `.bfbs` reflection (tables, fields, types, enums, defaults) and structural mutation generation (boundary scalars, invalid UTF-8, truncation, corrupted offsets), with `pgregory.net/rapid` property tests.
+- [x] Implement the Reference Mock Peer (state-machine mock) used to verify client actors, plus the Harness Client for receiver actors, over length-prefixed Unix-socket framing.
+- [ ] Wire the harness into `verify_actor_behavior` with a suite/run convention (actor launch command, seed frames and scripted peer scenarios).
 
 ### Phase 5: Litmus Test (Thesis Validation)
 

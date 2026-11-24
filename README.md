@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 3 complete.** `internal/compiler` implements the semantic compiler: an OpenAI-compatible LLM proposes complete `purpose.md`, `protocol.fbs` and `state_machine.json` contents, while `flatc` remains the gatekeeper for syntax and backward compatibility. Committed changes are written atomically and snapshotted under `governance/history/` with a unified diff and metadata. The next milestone is Phase 4 (deterministic harness). See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 4 core complete.** `internal/harness` parses `.bfbs` reflection (tables, fields, types, enums), validates payloads, generates structural mutations and provides two verification engines: `HarnessClient` for receiver actors and `ReferenceMockPeer` for emitter actors. The `verify_actor_behavior` MCP tool is not wired yet: it needs a suite/run convention for launching binaries and loading seed frames. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -76,7 +76,7 @@ The target layout (see the architecture document for details):
     ├── compiler/            # LLM semantic compiler, flatc gates, history
     ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
     ├── governance/          # purpose.md parser and actor filtering
-    ├── harness/             # (planned) deterministic test runner
+    ├── harness/             # .bfbs reflection, mutation, HarnessClient, mock peer
     ├── llm/                 # OpenAI-compatible structured-output client
     └── mcp/                 # MCP tools, handlers, HTTP auth
 ```
@@ -123,6 +123,17 @@ make build
 ```
 
 The LLM may only propose; `flatc --binary --schema` and `flatc --conform` decide whether a change is valid. Committed changes are written atomically and snapshotted under `governance/history/<timestamp>_<actor>/` with `diff.patch` and `meta.json`. Without an LLM configured, the tool reports that the compiler is unavailable.
+
+## Harness
+
+`internal/harness` verifies actor binaries without reading their source:
+
+- `LoadSchema` parses the `.bfbs` emitted by `flatc --binary --schema`.
+- `Schema.Validate` and `BoundaryMutations` check frames and generate structural mutations (boundary scalars, invalid UTF-8, truncation, corrupted offsets).
+- `HarnessClient` verifies actors that receive messages: valid seeds must respond, malformed frames may be dropped or answered with a valid buffer, and a closed connection is a failure.
+- `ReferenceMockPeer` verifies actors that emit messages with scripted request/response scenarios, checks, delays and timeout/sequence paths.
+
+Property tests in the harness use `pgregory.net/rapid`. The MCP `verify_actor_behavior` tool still needs a suite/run convention (how to launch the actor and where seed frames come from) before it can be wired to these engines.
 
 ## Documentation
 
