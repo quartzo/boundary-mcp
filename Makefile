@@ -1,4 +1,4 @@
-.PHONY: build test fmt vet clean litmus litmus-sdk judge-eval
+.PHONY: build test fmt vet clean litmus litmus-sdk judge-eval judge-calibrate
 
 build:
 	go build -o bin/boundary-mcp ./cmd/boundary-mcp
@@ -23,3 +23,6 @@ litmus-sdk:
 
 judge-eval:
 	go run ./cmd/judge-eval -cases internal/judge/testdata/cases
+
+judge-calibrate:
+	go run ./cmd/judge-eval -cases synthetic

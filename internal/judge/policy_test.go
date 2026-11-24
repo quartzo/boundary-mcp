@@ -61,6 +61,26 @@ func TestPolicyNormalizesThresholds(t *testing.T) {
 	}
 }
 
+func TestDefaultPolicyCalibration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		probability float64
+		want        Decision
+	}{
+		{0.39, Allow},
+		{0.40, Review},
+		{0.69, Review},
+		{0.70, Reject},
+	}
+	for _, tt := range tests {
+		verdict := DefaultPolicy().Decide(&Assessment{Rules: map[string]float64{"rule": tt.probability}})
+		if verdict.Decision != tt.want {
+			t.Errorf("p=%.2f: Decision = %q, want %q", tt.probability, verdict.Decision, tt.want)
+		}
+	}
+}
+
 func TestPolicyNilAssessment(t *testing.T) {
 	t.Parallel()
 

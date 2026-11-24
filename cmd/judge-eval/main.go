@@ -13,11 +13,12 @@ import (
 )
 
 func main() {
-	casesDir := flag.String("cases", "internal/judge/testdata/cases", "directory of labeled case JSON files")
+	casesDir := flag.String("cases", "internal/judge/testdata/cases", "case directory, or 'synthetic' for the built-in set")
+	limit := flag.Int("limit", 0, "maximum cases to run (0 = all)")
 	apiKey := flag.String("api-key", "", "OpenRouter API key (defaults to OPENROUTER_API_KEY or opencode auth)")
 	baseURL := flag.String("base-url", envOr("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"), "System One base URL")
 	model := flag.String("model", envOr("JUDGE_MODEL", "typesafe/jev-1.14"), "JEV model ID")
-	reviewAt := flag.Float64("review-at", 0.30, "review threshold")
+	reviewAt := flag.Float64("review-at", 0.40, "review threshold")
 	rejectAt := flag.Float64("reject-at", 0.70, "reject threshold")
 	timeout := flag.Duration("timeout", 2*time.Minute, "overall timeout")
 	flag.Parse()
@@ -28,9 +29,12 @@ func main() {
 		os.Exit(2)
 	}
 
-	cases, err := judge.LoadCases(*casesDir)
+	cases, err := loadCases(*casesDir)
 	if err != nil {
 		fail(err)
+	}
+	if *limit > 0 && *limit < len(cases) {
+		cases = cases[:*limit]
 	}
 	if len(cases) == 0 {
 		fail(fmt.Errorf("no cases found in %s", *casesDir))
@@ -101,6 +105,13 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func loadCases(source string) ([]judge.Case, error) {
+	if source == "synthetic" {
+		return judge.SyntheticCases(), nil
+	}
+	return judge.LoadCases(source)
 }
 
 func fail(err error) {

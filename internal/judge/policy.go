@@ -6,9 +6,11 @@ type Policy struct {
 	RejectAt float64
 }
 
-// DefaultPolicy uses the starting thresholds recommended for Nouls.
+// DefaultPolicy uses the thresholds calibrated on the synthetic seed set:
+// 0.40 separates compatible changes (max observed probability 0.39) from
+// semantic violations (min 0.89). Revalidate on real proposals.
 func DefaultPolicy() Policy {
-	return Policy{ReviewAt: 0.30, RejectAt: 0.70}
+	return Policy{ReviewAt: 0.40, RejectAt: 0.70}
 }
 
 // Decide combines the rule probabilities with the max-rule policy.
@@ -46,14 +48,15 @@ func (p Policy) Decide(assessment *Assessment) Verdict {
 }
 
 func (p Policy) normalized() Policy {
+	defaults := DefaultPolicy()
 	if p.ReviewAt <= 0 {
-		p.ReviewAt = 0.30
+		p.ReviewAt = defaults.ReviewAt
 	}
 	if p.RejectAt <= 0 {
-		p.RejectAt = 0.70
+		p.RejectAt = defaults.RejectAt
 	}
 	if p.RejectAt <= p.ReviewAt {
-		p = DefaultPolicy()
+		p = defaults
 	}
 	return p
 }

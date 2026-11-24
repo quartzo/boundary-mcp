@@ -53,6 +53,9 @@ type Options struct {
 	Judge judge.Judge
 	// JudgeMode defaults to JudgeOff.
 	JudgeMode JudgeMode
+	// JudgePolicy overrides the default thresholds. Zero values use the
+	// calibrated defaults.
+	JudgePolicy judge.Policy
 	// Clock is injectable for deterministic tests. Defaults to time.Now.
 	Clock func() time.Time
 	// SDKTargets are regenerated after a successful commit.
@@ -374,7 +377,7 @@ func (c *Compiler) apply(ctx context.Context, in applyInput) (*mcp.ProposalResul
 			return nil, fmt.Errorf("compiler: judge: %w", err)
 		}
 
-		verdict := judge.DefaultPolicy().Decide(assessment)
+		verdict := c.opts.JudgePolicy.Decide(assessment)
 		judgeRecord = newJudgeMeta(assessment, verdict)
 		switch verdict.Decision {
 		case judge.Reject:

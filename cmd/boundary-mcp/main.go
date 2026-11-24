@@ -54,6 +54,8 @@ func main() {
 		judgeBaseURL  = flag.String("judge-base-url", envOr("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"), "System One API base URL")
 		judgeAPIKey   = flag.String("judge-api-key", envOr("OPENROUTER_API_KEY", ""), "OpenRouter API key for JEV")
 		judgeModel    = flag.String("judge-model", envOr("JUDGE_MODEL", "typesafe/jev-1.14"), "JEV model ID")
+		judgeReviewAt = flag.Float64("judge-review-at", 0.40, "judge review threshold")
+		judgeRejectAt = flag.Float64("judge-reject-at", 0.70, "judge reject threshold")
 		syncFlag      = flag.Bool("sync", false, "sync purpose.md and protocol.fbs once, print the result and exit")
 		showVersion   = flag.Bool("version", false, "print version and exit")
 	)
@@ -68,6 +70,7 @@ func main() {
 		*governanceDir, *sdkOut,
 		*llmBaseURL, *llmAPIKey, *llmModel,
 		*judgeMode, *judgeBaseURL, *judgeAPIKey, *judgeModel,
+		*judgeReviewAt, *judgeRejectAt,
 	)
 	if err != nil {
 		log.Fatalf("boundary-mcp: %v", err)
@@ -120,7 +123,7 @@ func main() {
 	}
 }
 
-func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judgeBaseURL, judgeAPIKey, judgeModel string) (*compiler.Compiler, error) {
+func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judgeBaseURL, judgeAPIKey, judgeModel string, judgeReviewAt, judgeRejectAt float64) (*compiler.Compiler, error) {
 	mode := compiler.JudgeMode(strings.TrimSpace(judgeMode))
 	if mode == "" {
 		mode = compiler.JudgeOff
@@ -176,6 +179,10 @@ func newCompiler(governanceDir, sdkOut, baseURL, apiKey, model, judgeMode, judge
 		SDKTargets:    targets,
 		Judge:         semanticJudge,
 		JudgeMode:     mode,
+		JudgePolicy: judge.Policy{
+			ReviewAt: judgeReviewAt,
+			RejectAt: judgeRejectAt,
+		},
 	})
 }
 

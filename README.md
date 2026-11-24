@@ -140,13 +140,14 @@ export OPENROUTER_API_KEY=...
 
 It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. `-judge=off` is the default; `judge=enforce` requires the semantic compiler and an OpenRouter key. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
 
-Run the labeled benchmark with:
+The calibrated defaults are `-judge-review-at 0.40` and `-judge-reject-at 0.70`. Run the labeled benchmark with:
 
 ```bash
 go run ./cmd/judge-eval -cases internal/judge/testdata/cases
+make judge-calibrate   # built-in 100-case synthetic set
 ```
 
-A five-case smoke run produced 4/5 correct, 0 false allows, 1 false escalation (a deprecation flagged as drift at 0.59), p95 ≈ 432 ms and ≈ $0.00005 per case. This is a smoke test, not calibration.
+A 100-case synthetic calibration at 0.40/0.70 produced 0 false allows across two runs; false escalations on compatible cases were 0 in the first run and 1 in the second (allow maximum 0.39–0.42), while semantic violations started at 0.89. p95 was 356–558 ms and the run cost ≈ $0.0055 (≈ $0.00005 per case). JEV probabilities vary between runs; the seed set is template-generated, so revalidate on real proposals before accepting ADR-0001.
 
 See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md).
 

@@ -57,11 +57,11 @@ Each rule is one question with explicit true/false criteria. Rules are decompose
 ### Cascade rules (initial)
 
 - `flatc` rejects → reject; forward the `flatc` diagnostic unchanged.
-- `flatc` accepts and every judge rule has `P(rule broken) < 0.30` → accept.
+- `flatc` accepts and every judge rule has `P(rule broken) < 0.40` → accept.
 - `flatc` accepts and any judge rule has `P(rule broken) ≥ 0.70` → reject or escalate to a reasoning model or human review.
 - Otherwise → review queue.
 
-Thresholds are starting points and must be calibrated on the project's own data. Probabilities are logged with the proposal history.
+The 0.40 review threshold comes from the synthetic calibration below; 0.70 is the initial rejection threshold. Both must be revalidated on real proposals.
 
 ## Non-goals
 
@@ -74,7 +74,14 @@ Thresholds are starting points and must be calibrated on the project's own data.
 
 **Dataset.** At least 100 labeled proposals spanning compatible additions, breaking changes, deprecated fields, invariant removal, out-of-scope edits, intent mismatch and no-op changes. Labels include the `flatc` outcome and the desired semantic verdict. Cases are JSON files; `cmd/judge-eval` loads a directory of them and prints decisions, confusion counts, false allows, false escalations, p95 latency and `usage.cost`.
 
-**Initial smoke test (2026-11-24).** Five labeled cases through `cmd/judge-eval`: 4/5 correct, 0 false allows, 1 false escalation (`correct-deprecation`, `purpose_protocol_drift` at 0.59), p95 432 ms and $0.00005 per case. This is a smoke test, not calibration.
+**Synthetic calibration (2026-11-24).** 100 template-generated cases, ten families × ten variants: three compatible families, six semantic-violation families and one ambiguous family. Through `cmd/judge-eval` and `typesafe/jev-1.14`:
+
+| review threshold | correct | false allows | false escalations (allow) | review → reject |
+| --- | ---: | ---: | ---: | ---: |
+| 0.30 | 82/100 | 0 | 8 | 10 |
+| 0.40 | 90/100 | 0 | 0–1 | 9–10 |
+
+Compatible probabilities maxed at 0.39–0.42 across two runs; semantic violations started at 0.89. p95 was 356–558 ms and the whole run cost $0.00546 (about $0.00005 per case). JEV probabilities vary between runs, so cache and repeat before drawing conclusions. The 0.40 default comes from this separation. The set is template-generated, so these numbers are a seed calibration, not proof of generalization; revalidate on real proposals before accepting this ADR.
 
 **Metrics.**
 
