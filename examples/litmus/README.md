@@ -71,6 +71,23 @@ The script backs up the current actor, wipes it, launches the sandbox, runs
 the suites and restores the backup if the reconstruction fails. On success it
 keeps the reconstructed implementation for review.
 
+## Phase 5b result
+
+On 2026-11-24, `actor_enrich` was wiped and reconstructed by a sandboxed
+`opencode` session working only from the boundary context (`purpose.md`,
+`protocol.fbs` via the MCP server, and the read-only `/sdk` module). The session
+could not read `actor_ingest` or the hidden suites.
+
+- `actor_enrich`: **PASS**, 11 hidden cases.
+- `actor_ingest`: **PASS**, 3 scripted cases.
+- Reconstructed implementation: `actors/actor_enrich/main.go` (committed).
+- Model reported by the sandboxed session: `radixark/daisyrose-27b`.
+
+The agent replaced the original framing helper with a single self-contained
+`main.go`, used only the generated SDK, the FlatBuffers runtime and the
+standard library, and passed its own smoke tests before invoking
+`verify_actor_behavior`.
+
 ## Modules
 
 - `sdk/go/litmus` is a Go module with module path `litmus`.

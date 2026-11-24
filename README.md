@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 5a complete.** `examples/litmus/` contains a self-contained two-actor boundary (`actor_ingest` + `actor_enrich`), the contract, hidden suites and a deterministic `make litmus` acceptance run. Phase 5b — the sandboxed agent reconstruction and disposability test — is the next milestone. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 5b complete for `actor_enrich`.** `examples/litmus/` holds the two-actor boundary, contract, hidden suites and `make litmus`. The `actor_enrich` implementation was wiped and reconstructed by a sandboxed `opencode` session using only the boundary context (purpose, protocol and read-only SDK); the reconstructed actor passes the hidden suite. Repeating the reconstruction for `actor_ingest` remains optional. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
