@@ -166,6 +166,19 @@ add_rw "$DATA_HOME/opencode" "$DATA_HOME/opencode"
 add_rw "$STATE_HOME/opencode" "$STATE_HOME/opencode"
 add_rw "$CACHE_HOME/opencode" "$CACHE_HOME/opencode"
 
+# Go toolchain caches: the agent must be able to build from the read-only SDK
+# and resolve the FlatBuffers module without re-downloading it on every run.
+GO_PATH=$(go env GOPATH 2>/dev/null || true)
+if [[ -n "$GO_PATH" ]]; then
+  mkdir -p "$GO_PATH"
+  add_rw "$GO_PATH" "$GO_PATH"
+fi
+GO_CACHE=$(go env GOCACHE 2>/dev/null || true)
+if [[ -n "$GO_CACHE" ]]; then
+  mkdir -p "$GO_CACHE"
+  add_rw "$GO_CACHE" "$GO_CACHE"
+fi
+
 add_ro "$ROOT_DIR/sdk" /sdk
 
 ARGS+=(

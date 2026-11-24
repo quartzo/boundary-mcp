@@ -8,7 +8,7 @@ import (
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
-	"boundary-mcp/examples/litmus/sdk/go/litmus"
+	"litmus"
 )
 
 const (

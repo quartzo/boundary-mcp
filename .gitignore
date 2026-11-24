@@ -36,3 +36,7 @@ vendor/
 
 # Litmus actor build output
 examples/litmus/actors/*/bin/
+
+# Go binaries built directly inside litmus actor workspaces
+examples/litmus/actors/*/actor_enrich
+examples/litmus/actors/*/actor_ingest
