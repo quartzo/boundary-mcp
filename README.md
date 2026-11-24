@@ -8,7 +8,26 @@
 
 **Phase 3 complete.** `internal/compiler` implements the semantic compiler: an OpenAI-compatible LLM proposes complete `purpose.md`, `protocol.fbs` and `state_machine.json` contents, while `flatc` remains the gatekeeper for syntax and backward compatibility. Committed changes are written atomically and snapshotted under `governance/history/` with a unified diff and metadata. The next milestone is Phase 4 (deterministic harness). See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
-## Why
+## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
+
+Modern distributed systems overwhelmingly default to **JSON** as the wire protocol between services and agents. The standard justification is *evolutionary flexibility*—the ability to add fields and iterate quickly without upfront schema coordination.
+
+In practice, this flexibility is an accounting illusion. Schemaless protocols do not eliminate contract rigidity; they merely move it out of the compiler and into **fragile mental models** (and now, into the stochastic context windows of LLMs).
+
+### The Hidden Cost of Mental-Model Contracts
+
+1. **Semantics Trapped in Tribal Knowledge:** A JSON payload like `{"status": "pending"}` carries structure, not semantics. It does not specify idempotency guarantees, retry bounds, nullability semantics, or valid state transitions. Those rules live implicitly inside imperative code paths and developers' heads—until an AI agent refactors a module and silently breaks an unstated invariant.
+2. **Inversion of Engineering Gravity:** Because keeping prose documentation, IDLs, and code synchronized manually is tedious, teams treat imperative implementation as the sole source of truth and the boundary protocol as an accidental byproduct. When LLMs operate under this model, they optimize for making local code pass by quietly mutating the boundary—eroding system modularity into a distributed monolith.
+3. **Evolution Without Rigor Is Unnecessary:** Binary formats like **FlatBuffers** solved schema evolution over a decade ago. You can append fields, deprecate obsolete ones, and maintain forward/backward compatibility (`flatc --conform`) while gaining *zero-copy* performance and compile-time type safety.
+
+### Shifting the Center of Gravity
+
+**Boundary-MCP** inverts the workflow:
+
+- **Human and AI cognitive effort is invested at the boundary**, co-evolving human-readable intent (`purpose.md`) with a strict, evolvable binary contract (`protocol.fbs`) and executable behavioral invariants.
+- **Internal actor implementations become disposable commodities**, developed in isolated sandboxes with zero visibility into neighboring internals—guaranteed to be interchangeable as long as they satisfy the boundary contract.
+
+## Failure Modes Addressed
 
 LLM-assisted software engineering tends to fail in three predictable ways:
 
