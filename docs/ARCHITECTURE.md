@@ -162,16 +162,16 @@ The sole mechanism through which an agent can request changes to the protocol or
 
 **Internal Pipeline (Hybrid: Semantic + Deterministic):**
 
-1. **Semantic Analysis (Encapsulated Agent):** The MCP's internal LLM receives the current `purpose.md`, the current `protocol.fbs`, and the proposal. It emits a candidate `protocol.fbs.next` and a textual diff `purpose.md.next`.
+1. **Semantic Analysis (Encapsulated Agent):** The MCP's internal LLM receives the current `purpose.md`, `protocol.fbs` and `state_machine.json`, plus the proposal. Using strict JSON Schema structured outputs, it returns the complete candidate contents of all three artifacts.
 2. **Syntactic Gatekeeper (`flatc`):** Runs `flatc --binary --schema -o /tmp protocol.fbs.next` to validate syntax and types.
 3. **Compatibility Gatekeeper (`flatc --conform`):** Runs `flatc --conform protocol.fbs protocol.fbs.next`.
    - **On failure (breaking change):** Automatically rejects the proposal and returns the exact `flatc` diagnostic to the agent (e.g., *"Field removed or ID altered; mark as deprecated instead of deleting"*).
 4. **Bidirectional Commit:** Upon passing validation:
-   - Writes `governance/protocol.fbs` and `governance/purpose.md`.
-   - Saves a snapshot to `governance/history/<timestamp>_<actor>.patch`.
-   - Recompiles SDKs into `/sdk/go` and `/sdk/rust`.
-   - Regenerates boundary tests in `governance/hidden_tests/`.
-   - Marks dependent consumer actors as `STALE` in the MCP's internal state.
+   - Writes `governance/protocol.fbs`, `governance/purpose.md` and `governance/state_machine.json` atomically.
+   - Saves a snapshot under `governance/history/<timestamp>_<actor>/` with the three artifacts, a human-readable `diff.patch` and a `meta.json` (intent, direction, model, affected invariants).
+   - Recompiles SDKs into `/sdk/go` and `/sdk/rust` (host paths: `sdk/go` and `sdk/rust`).
+   - Regenerates boundary tests in `governance/hidden_tests/` (Phase 4 hook).
+   - Marks dependent consumer actors as `STALE` in the MCP's internal state (Phase 4 hook).
 
 ### 5.3 `verify_actor_behavior`
 
@@ -286,8 +286,8 @@ The launcher:
 
 ### Phase 3: Bidirectional Semantic Compiler (`internal/compiler`)
 
-- [ ] Integrate an LLM client (with strict JSON Schema structured outputs) inside `boundary-mcp` to translate `purpose.md` ↔ `protocol.fbs` + `state_machine.json`.
-- [ ] Implement audit logging in `governance/history/` with human-readable diffs.
+- [x] Integrate an LLM client (OpenAI-compatible, strict JSON Schema structured outputs) inside `boundary-mcp` to translate `purpose.md` ↔ `protocol.fbs` + `state_machine.json`.
+- [x] Implement audit logging in `governance/history/` with human-readable unified diffs and per-commit metadata.
 
 ### Phase 4: Boundary Test Inducer (`internal/harness`)
 

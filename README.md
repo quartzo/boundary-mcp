@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 2 complete.** `cmd/boundary-mcp` serves the control plane over stdio or loopback Streamable HTTP, exposing `get_boundary_context` (filtered `purpose.md` + full `protocol.fbs` + SDK path) plus the `propose_contract_evolution` and `verify_actor_behavior` tool contracts. `cmd/sandbox-run` launches isolated `opencode` sessions while `boundary-mcp` stays outside the mount namespace. The next milestone is Phase 3 (bidirectional semantic compiler). See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 3 complete.** `internal/compiler` implements the semantic compiler: an OpenAI-compatible LLM proposes complete `purpose.md`, `protocol.fbs` and `state_machine.json` contents, while `flatc` remains the gatekeeper for syntax and backward compatibility. Committed changes are written atomically and snapshotted under `governance/history/` with a unified diff and metadata. The next milestone is Phase 4 (deterministic harness). See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why
 
@@ -54,10 +54,11 @@ The target layout (see the architecture document for details):
 │   ├── boundary-mcp/        # MCP server (stdio / loopback HTTP)
 │   └── sandbox-run/         # bwrap launcher + opencode.json template
 └── internal/
-    ├── compiler/            # (planned) purpose.md <-> protocol.fbs
+    ├── compiler/            # LLM semantic compiler, flatc gates, history
     ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
     ├── governance/          # purpose.md parser and actor filtering
     ├── harness/             # (planned) deterministic test runner
+    ├── llm/                 # OpenAI-compatible structured-output client
     └── mcp/                 # MCP tools, handlers, HTTP auth
 ```
 
@@ -67,6 +68,7 @@ The target layout (see the architecture document for details):
 - **FlatBuffers compiler** (`flatc`) — exercised in integration tests with 25.12.x
 - **Bubblewrap** (`bwrap`) on Linux, for sandboxed agent sessions
 - **opencode**, for the agent-facing workflow
+- An **OpenAI-compatible LLM endpoint** (optional), for the semantic compiler
 
 ## Development
 
@@ -87,6 +89,21 @@ Once `actors/<name>/` and `governance/` exist, launch an isolated session with:
 ```
 
 `sandbox-run` starts `boundary-mcp` outside the sandbox, waits for readiness, renders `opencode.json`, and launches `bwrap` with only the actor workspace and the read-only SDK mounted. Set `BOUNDARY_DRY_RUN=1` to inspect the plan without launching anything.
+
+## Semantic compiler
+
+`propose_contract_evolution` and the one-shot `-sync` mode are enabled when an OpenAI-compatible endpoint is configured:
+
+```bash
+export BOUNDARY_LLM_BASE_URL=https://openrouter.ai/api/v1
+export BOUNDARY_LLM_API_KEY=...
+export BOUNDARY_LLM_MODEL=...
+
+make build
+./bin/boundary-mcp -sync -governance governance
+```
+
+The LLM may only propose; `flatc --binary --schema` and `flatc --conform` decide whether a change is valid. Committed changes are written atomically and snapshotted under `governance/history/<timestamp>_<actor>/` with `diff.patch` and `meta.json`. Without an LLM configured, the tool reports that the compiler is unavailable.
 
 ## Documentation
 
