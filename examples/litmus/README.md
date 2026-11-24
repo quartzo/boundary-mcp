@@ -17,6 +17,10 @@ examples/litmus/
 │   ├── purpose.md
 │   ├── protocol.fbs
 │   ├── state_machine.json
+│   ├── aliases.json          # human names for content-addressed versions
+│   ├── versions/<hash>/      # immutable snapshots
+│   ├── actors/*.json         # adoption pins
+│   ├── compat/*.json         # compatibility manifests
 │   └── hidden_tests/
 │       ├── actor_ingest.json
 │       └── actor_enrich.json
@@ -54,6 +58,24 @@ make sdk      # regenerate sdk/go from governance/protocol.fbs
   closing the connection.
 - `actor_ingest` in **client** mode: scripted scenarios check the request
   fields, exercise the happy path and force a timeout so the actor must retry.
+
+## Versioning
+
+The example governance is snapshotted as `v0` in
+`governance/versions/<hash>/` and both actors are pinned to it. The snapshot is
+immutable; editing `purpose.md`, `protocol.fbs` or `state_machine.json` creates a
+new candidate without changing `v0`.
+
+From the repository root:
+
+```bash
+go run ./cmd/versionctl list -governance examples/litmus/governance
+go run ./cmd/versionctl compat -governance examples/litmus/governance -base v0
+```
+
+`compat` compares the working tree with `v0` and writes a manifest under
+`governance/compat/`. See
+[ADR-0002](../../docs/adr/0002-content-addressed-protocol-versions.md).
 
 ## Phase split
 

@@ -1,0 +1,14 @@
+{
+  "base": "sha256:26394247b57322e5215accd1c06ac4d31ecc6cea5b4584ce08838e06e5f0350d",
+  "candidate": "sha256:26394247b57322e5215accd1c06ac4d31ecc6cea5b4584ce08838e06e5f0350d",
+  "wire": "compatible",
+  "class": "identical",
+  "review_required": false,
+  "semantic": "not_evaluated",
+  "evidence": {
+    "flatc_conform": "pass",
+    "flatc_version": "flatc version 25.12.19",
+    "structural_diff": "pass"
+  },
+  "created_at": "2026-11-24T19:39:39.320436454Z"
+}

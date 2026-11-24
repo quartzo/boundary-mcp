@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 6 experiment implemented and seed-calibrated.** `internal/judge` calls JEV through OpenRouter's typed System One API and is mandatory whenever the semantic compiler is enabled. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-judge path. The Phase 5 litmus remains green. Real-proposal calibration is still required before accepting ADR-0001. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 6 experiment implemented and seed-calibrated; versioning prototype added.** `internal/judge` calls JEV through OpenRouter's typed System One API and is mandatory whenever the semantic compiler is enabled. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-judge path. The Phase 5 litmus remains green. Real-proposal calibration is still required before accepting ADR-0001. The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -74,7 +74,8 @@ The target layout (see the architecture document for details):
 ├── cmd/
 │   ├── boundary-mcp/        # MCP server (stdio / loopback HTTP)
 │   ├── judge-eval/          # labeled proposal benchmark for JEV
-│   └── sandbox-run/         # bwrap launcher + opencode.json template
+│   ├── sandbox-run/         # bwrap launcher + opencode.json template
+│   └── versionctl/          # content-addressed versions, aliases, adoption
 └── internal/
     ├── compiler/            # LLM semantic compiler, flatc gates, history
     ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
@@ -82,7 +83,8 @@ The target layout (see the architecture document for details):
     ├── harness/             # .bfbs reflection, frame builder, verifier engines
     ├── judge/               # advisory JEV / System One judge
     ├── llm/                 # OpenAI-compatible structured-output client
-    └── mcp/                 # MCP tools, handlers, HTTP auth
+    ├── mcp/                 # MCP tools, handlers, HTTP auth
+    └── versioning/          # version hashes, aliases, compatibility manifests
 ```
 
 ## Requirements
@@ -131,7 +133,7 @@ The LLM may only propose; `flatc --binary --schema` and `flatc --conform` decide
 
 ## Semantic judge (experiment)
 
-The optional advisory judge runs after `flatc` and before commit:
+The advisory judge runs after `flatc` and before commit:
 
 ```bash
 export OPENROUTER_API_KEY=...
@@ -151,6 +153,23 @@ make judge-e2e         # one live compiler -> judge proposal
 A 100-case synthetic calibration at 0.40/0.70 produced 0 false allows across two runs; false escalations on compatible cases were 0 in the first run and 1 in the second (allow maximum 0.39–0.42), while semantic violations started at 0.89. p95 was 356–558 ms and the run cost ≈ $0.0055 (≈ $0.00005 per case). JEV probabilities vary between runs; the seed set is template-generated, so revalidate on real proposals before accepting ADR-0001.
 
 See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md).
+
+## Protocol versions and compatibility
+
+Version identity is content-addressed. A snapshot hashes `purpose.md`, `protocol.fbs` and `state_machine.json`; the hash is the identity, while the date, actor and intent are annotations. A separate wire hash identifies `protocol.fbs` alone. Aliases such as `v0` are human pointers to immutable hashes.
+
+`versionctl` is the first prototype for the versioning model; it snapshots and analyzes without changing the active contract:
+
+```bash
+go run ./cmd/versionctl snapshot -governance examples/litmus/governance -alias v0
+go run ./cmd/versionctl compat -governance examples/litmus/governance -base v0
+go run ./cmd/versionctl pin -governance examples/litmus/governance -actor actor_ingest -role producer -version v0
+go run ./cmd/versionctl list -governance examples/litmus/governance
+```
+
+`compat` runs `flatc --conform` and a reflection diff. The manifest records wire compatibility, structural changes, a class (`identical`, `additive`, `semantic_change`, `breaking`) and whether human review is required. Role-specific classes (`producer_only`, `consumer_only`, `requires_peer_upgrade`) are the next step for the JEV classifier.
+
+Actor pins record adoption without changing the contract. The prototype does not change the compiler's auto-commit lifecycle; draft/promote/abandon and the pairwise adoption matrix are follow-ups. The litmus example includes its `v0` snapshot and actor pins under `examples/litmus/governance/`. See [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md).
 
 ## Harness
 
@@ -184,8 +203,9 @@ Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` 
 - [Architecture specification](docs/ARCHITECTURE.md) — topology, contracts, tool specs, isolation model, and roadmap.
 - [Litmus example](examples/litmus/README.md) — two-actor acceptance fixture and hidden suites.
 - [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — implemented Phase 6 judge; mandatory with the semantic compiler.
+- [ADR-0002: Content-Addressed Protocol Versions](docs/adr/0002-content-addressed-protocol-versions.md) — version hashes, compatibility classes, aliases and actor adoption.
 - [ADR index](docs/adr/README.md) — conventions and decision history.
 
 ## Roadmap
 
-The MVP is organized in five phases, from the deterministic FlatBuffers core to a disposability litmus test. See [Implementation Roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+The MVP is organized in five phases, from the deterministic FlatBuffers core to a disposability litmus test. The Phase 6 judge experiment and the ADR-0002 versioning prototype build on top. See [Implementation Roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).

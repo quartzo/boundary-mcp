@@ -1,0 +1,37 @@
+{
+  "states": ["IDLE", "PENDING", "COMPLETED", "FAILED", "DEAD_LETTER"],
+  "transitions": [
+    {
+      "from": "IDLE",
+      "to": "PENDING",
+      "message": "Envelope.REQUEST",
+      "actor": "actor_ingest"
+    },
+    {
+      "from": "PENDING",
+      "to": "COMPLETED",
+      "message": "Envelope.RESPONSE",
+      "actor": "actor_enrich"
+    },
+    {
+      "from": "PENDING",
+      "to": "FAILED",
+      "message": "Envelope.ERROR",
+      "actor": "actor_enrich"
+    },
+    {
+      "from": "PENDING",
+      "to": "PENDING",
+      "message": "Envelope.REQUEST",
+      "actor": "actor_ingest",
+      "note": "retry"
+    },
+    {
+      "from": "PENDING",
+      "to": "DEAD_LETTER",
+      "message": "retry_exhausted",
+      "actor": "actor_ingest"
+    }
+  ],
+  "invariants": ["INV-01", "INV-02", "INV-03", "INV-04", "INV-05"]
+}

@@ -206,6 +206,14 @@ Invoked by the human architect (or a file watcher) whenever `purpose.md` or `pro
 2. If `purpose.md` changed → compiles updates to `protocol.fbs` + tests.
 3. If `protocol.fbs` changed → decompiles the semantic diff and updates `purpose.md` + tests.
 
+### 5.5 Versioned evolution (prototype)
+
+[ADR-0002](adr/0002-content-addressed-protocol-versions.md) adds a content-addressed layer around the auto-commit path. A version is the SHA-256 hash of `purpose.md`, `protocol.fbs` and `state_machine.json`; actors pin the version they adopted, and `versionctl` records human aliases such as `v0`.
+
+Compatibility is a relation between a base and a candidate version. `flatc --conform` decides wire compatibility; a reflection diff records structural changes; the JEV judge will classify semantic and role-specific impact (`producer_only`, `consumer_only`, `requires_peer_upgrade`). A required field added to an existing table is a concrete case that `flatc` accepts but must be treated as breaking for old peers.
+
+The current prototype is read-only with respect to the active contract: `snapshot`, `compat`, `list`, `show`, `alias` and `pin`. Draft creation, promotion, abandonment, the wire-version field and the pairwise adoption matrix are follow-ups. The compiler still commits proposals directly; the draft lifecycle is not yet wired into `propose_contract_evolution`.
+
 ---
 
 ## 6. Deterministic Test Induction and Execution Engine
@@ -331,6 +339,17 @@ The launcher:
 ### Proposed (not part of the MVP): Advisory Semantic Judge (ADR-0001)
 
 A Phase 6 experiment adds an **advisory** semantic judge (JEV / System One via OpenRouter's typed System One API) between the LLM proposal and the deterministic gates. It catches semantic drift that `flatc` cannot see, triages harness counterexamples and scores litmus reconstructions with cheap calibrated judgments. It runs in `enforce` mode in the experiment because there is no production traffic, and it must never replace `flatc --conform` or the harness as the contract oracle. See [ADR-0001](adr/0001-advisory-semantic-judge.md).
+
+### Prototype: Versioned Evolution (ADR-0002)
+
+- [x] Content-addressed bundle and wire hashes.
+- [x] Immutable version snapshots, aliases and actor adoption pins.
+- [x] `flatc --conform` plus reflection-diff compatibility manifests.
+- [x] `versionctl` CLI: `snapshot`, `compat`, `list`, `show`, `alias`, `pin`.
+- [ ] JEV semantic/role classifier (`producer_only`, `consumer_only`, `requires_peer_upgrade`).
+- [ ] Draft/promote/abandon lifecycle in the compiler and MCP tools.
+- [ ] `protocol_version:uint` in the envelope.
+- [ ] Pairwise adoption matrix and promotion policy.
 
 ---
 

@@ -1,0 +1,43 @@
+namespace litmus;
+
+enum MessageType : byte {
+  UNKNOWN = 0,
+  REQUEST = 1,
+  RESPONSE = 2,
+  ERROR = 3
+}
+
+enum ErrorCode : byte {
+  NONE = 0,
+  INVALID_DOCUMENT = 1,
+  STORAGE_UNAVAILABLE = 2
+}
+
+table EnrichRequest {
+  correlation_id:string (required);
+  document_id:string (required);
+  requested_at_ms:ulong;
+}
+
+table EnrichResponse {
+  correlation_id:string (required);
+  document_id:string (required);
+  confidence_score:float;
+  display_name:string;
+  source_updated_at_ms:ulong;
+}
+
+table EnrichError {
+  correlation_id:string (required);
+  code:ErrorCode;
+  message:string;
+}
+
+table Envelope {
+  type:MessageType;
+  request:EnrichRequest;
+  response:EnrichResponse;
+  error:EnrichError;
+}
+
+root_type Envelope;

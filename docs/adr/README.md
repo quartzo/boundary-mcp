@@ -3,6 +3,7 @@
 | ADR | Status | Title |
 | --- | --- | --- |
 | [0001](0001-advisory-semantic-judge.md) | Proposed | Advisory semantic judge for contract evolution |
+| [0002](0002-content-addressed-protocol-versions.md) | Accepted | Content-addressed protocol versions, compatibility classes, adoption and aliases |
 
 ## Conventions
 

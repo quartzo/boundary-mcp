@@ -1,0 +1,8 @@
+{
+  "actor": "actor_ingest",
+  "role": "producer",
+  "version": "sha256:26394247b57322e5215accd1c06ac4d31ecc6cea5b4584ce08838e06e5f0350d",
+  "alias": "v0",
+  "adopted_at": "2026-11-24T19:42:56.472398389Z",
+  "status": "active"
+}
