@@ -140,5 +140,6 @@ The semantic/role-specific classifier, draft/promote/abandon MCP tools, pairwise
 ## References
 
 - [Architecture specification, §5](../ARCHITECTURE.md#5-boundary-mcp-tool-specifications)
+- [Protocol evolution workflows](../WORKFLOWS.md)
 - [ADR-0001: Advisory Semantic Judge](0001-advisory-semantic-judge.md)
 - [README: protocol versions](../../README.md#protocol-versions-and-compatibility)

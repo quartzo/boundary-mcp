@@ -214,6 +214,8 @@ Compatibility is a relation between a base and a candidate version. `flatc --con
 
 The current prototype is read-only with respect to the active contract: `snapshot`, `compat`, `list`, `show`, `alias` and `pin`. Draft creation, promotion, abandonment, the wire-version field and the pairwise adoption matrix are follow-ups. The compiler still commits proposals directly; the draft lifecycle is not yet wired into `propose_contract_evolution`.
 
+The end-to-end workflows — actor development, current auto-commit, designed draft/promote/abandon, compatibility classes, adoption and breaking changes — are documented in [WORKFLOWS.md](WORKFLOWS.md).
+
 ---
 
 ## 6. Deterministic Test Induction and Execution Engine

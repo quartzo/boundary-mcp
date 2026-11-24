@@ -57,6 +57,163 @@ Each agent session sees only:
 - the generated SDK under `/sdk` (read-only),
 - a filtered boundary context served by `boundary-mcp` over a bearer-protected loopback endpoint.
 
+## Workflows
+
+**Legend:** **Current** is implemented today. **Designed** is the accepted direction; it is not wired yet. The full reference is [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
+
+### Actor loop (Current)
+
+```text
+sandbox-run actor_x
+        |
+        v
+boundary-mcp outside the sandbox
+        |
+        +--> get_boundary_context(actor_x)
+        |       filtered purpose + active protocol + read-only SDK
+        |
+        +--> agent implements in /workspace
+        |
+        +--> verify_actor_behavior(actor_x)
+                hidden suite -> PASS or minimal counterexample
+```
+
+The sandbox has no access to `governance/`, other actors, or hidden tests. An actor cannot edit the contract; it can only request a change through the evolution loop.
+
+### Evolution loop (Current)
+
+```text
+propose_contract_evolution(actor, intent, ...)
+        |
+        v
+LLM produces complete purpose.md + protocol.fbs + state_machine.json
+        |
+        v
+flatc --binary --schema      syntax/types        fail -> rejected
+        |
+        v
+flatc --conform base next   wire compatibility  fail -> rejected
+        |
+        v
+SDK dry-run                  Go/Rust bindings     fail -> rejected
+        |
+        v
+JEV judge (mandatory)        semantic review     reject -> rejected
+        |                                        review -> escalated
+        v
+atomic commit + history snapshot + SDK regeneration
+        |
+        v
+actor calls verify_actor_behavior(actor)
+```
+
+`-sync` is the administrative equivalent for manual edits to `purpose.md` or `protocol.fbs`. It detects the changed artifact, updates the counterpart with the LLM, and runs the same gates. If both artifacts changed, it refuses to guess.
+
+This is a **single-line, auto-commit** model:
+
+- a passing proposal becomes active immediately;
+- every actor on the active line is bound by it;
+- there is no draft, candidate, promotion or abandonment state yet;
+- history records commits, not rejected proposals.
+
+The judge fails closed. If the semantic compiler is enabled, a missing OpenRouter key stops startup; there is no supported operating mode without the judge.
+
+### Versioned evolution loop (Designed)
+
+```text
+snapshot active as vN (content hash + alias)
+        |
+        v
+proposal -> draft_id + candidate_hash        (no active change)
+        |
+        v
+compatibility manifest
+  flatc --conform       wire compatibility
+  reflection diff       field/enum/root changes
+  JEV classifier        semantic + per-edge impact
+        |
+        +--> additive / producer_only / consumer_only
+        |         -> verify actors against the draft
+        |         -> promote -> active vN+1 + alias + wire version
+        |
+        +--> semantic_change
+        |         -> human review -> revise, promote or abandon
+        |
+        +--> breaking
+        |         -> major line v2 + dual-run + migration window
+        |
+        +--> abandoned
+                  -> status=abandoned, reason recorded, no version bump
+```
+
+Draft states:
+
+```text
+draft -> candidate -> active -> deprecated
+  \-> abandoned
+```
+
+A drafted change does not affect the active contract. Actors can be verified against the draft without adopting it. Promotion requires the gates, the required actor upgrades and owner approval; a breaking change cannot be promoted on the active line.
+
+### Compatibility classes
+
+| Class | Meaning | Upgrade order |
+| --- | --- | --- |
+| `identical` | No structural change. | Any |
+| `additive` | Old peers can ignore the change. | Any |
+| `producer_only` | Only the sender must upgrade. | Producer first |
+| `consumer_only` | Only the receiver must upgrade. | Consumer first |
+| `requires_peer_upgrade` | The other side must understand the change. | Coordinated |
+| `semantic_change` | Wire-compatible, but behavior/invariants changed. | Review required |
+| `breaking` | Old and new cannot interoperate. | Dual-run / major line |
+| `unknown` | Needs human review. | Blocked |
+
+`flatc --conform` is authoritative for wire compatibility, but it is not sufficient. It accepts adding a `required` field to an existing table; the reflection diff marks that as breaking because old peers do not send it.
+
+### Current vs designed
+
+| Capability | Status |
+| --- | --- |
+| Actor context, sandbox and hidden-suite verification | Current |
+| `propose_contract_evolution` auto-commit | Current |
+| Manual `-sync` reconciliation | Current |
+| Mandatory JEV judge with the semantic compiler | Current |
+| History snapshots and diffs | Current |
+| Content-addressed snapshots, aliases, adoption pins | Current |
+| `flatc --conform` + reflection compatibility manifest | Current |
+| Draft → candidate → active lifecycle | Designed |
+| Promote / abandon operations | Designed |
+| JEV role-specific compatibility (`producer_only`, `consumer_only`, `requires_peer_upgrade`) | Designed |
+| Pairwise adoption matrix and promotion policy | Designed |
+| `protocol_version:uint` in the envelope | Designed |
+| Breaking-change major line and dual-run | Designed |
+| Append-only event log for alias/promotion/adoption events | Designed |
+
+### Essential commands
+
+```bash
+# Actor session
+./cmd/sandbox-run/sandbox-run.sh actor_ingest
+
+# Evolution (single-line, current)
+./bin/boundary-mcp -llm-model ...
+./bin/boundary-mcp -sync -governance governance
+
+# Version metadata (current prototype)
+make version-snapshot
+make version-compat
+make version-list
+
+go run ./cmd/versionctl snapshot -governance governance -alias v1
+go run ./cmd/versionctl compat -governance governance -base v1
+go run ./cmd/versionctl pin -governance governance -actor actor_ingest -role producer -version v1
+go run ./cmd/versionctl list -governance governance
+```
+
+`make version-*` targets default to `examples/litmus/governance`; override with `VERSION_GOVERNANCE=...`.
+
+See [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the state machines, promotion gate, breaking-change procedure, field/enum rules and failure paths.
+
 ## Repository layout
 
 The target layout (see the architecture document for details):
@@ -94,7 +251,7 @@ The target layout (see the architecture document for details):
 - **Bubblewrap** (`bwrap`) on Linux, for sandboxed agent sessions
 - **opencode**, for the agent-facing workflow
 - An **OpenAI-compatible LLM endpoint** (optional), for the semantic compiler
-- An **OpenRouter API key** (optional), for the JEV semantic judge
+- An **OpenRouter API key** (required when the semantic compiler is enabled), for the JEV semantic judge
 
 ## Development
 
@@ -201,6 +358,7 @@ Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` 
 ## Documentation
 
 - [Architecture specification](docs/ARCHITECTURE.md) — topology, contracts, tool specs, isolation model, and roadmap.
+- [Workflows](docs/WORKFLOWS.md) — actor loop, auto-commit evolution, versioned draft lifecycle, compatibility and breaking changes.
 - [Litmus example](examples/litmus/README.md) — two-actor acceptance fixture and hidden suites.
 - [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — implemented Phase 6 judge; mandatory with the semantic compiler.
 - [ADR-0002: Content-Addressed Protocol Versions](docs/adr/0002-content-addressed-protocol-versions.md) — version hashes, compatibility classes, aliases and actor adoption.
