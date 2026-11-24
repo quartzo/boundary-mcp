@@ -325,6 +325,10 @@ The launcher:
 - [ ] Implement both actors in separate `sandbox-run` sessions.
 - [ ] **Disposability Test:** Wipe `actors/actor_enrich/*` completely, launch a fresh `sandbox-run actor_enrich` session, and verify that the new agent reconstructs the actor from scratch and passes 100% of hidden boundary tests without touching `actor_ingest`.
 
+### Proposed (not part of the MVP): Advisory Semantic Judge (ADR-0001)
+
+A proposed Phase 6 experiment adds an **advisory** semantic judge (JEV / System One) between the LLM proposal and the deterministic gates. It would catch semantic drift that `flatc` cannot see, triage harness counterexamples and score litmus reconstructions with cheap calibrated judgments. It must never replace `flatc --conform` or the harness as the contract oracle. See [ADR-0001](adr/0001-advisory-semantic-judge.md).
+
 ---
 
 ### Implementation Note for Phase 4

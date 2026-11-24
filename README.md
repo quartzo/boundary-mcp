@@ -154,6 +154,8 @@ Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` 
 ## Documentation
 
 - [Architecture specification](docs/ARCHITECTURE.md) — topology, contracts, tool specs, isolation model, and roadmap.
+- [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — proposed JEV / System One layer; not part of the current design.
+- [ADR index](docs/adr/README.md) — conventions and decision history.
 
 ## Roadmap
 
