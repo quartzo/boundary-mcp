@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -13,6 +14,32 @@ import (
 
 	"boundary-mcp/internal/mcp"
 )
+
+func TestLoadSchemaFallsBackToFBS(t *testing.T) {
+	t.Parallel()
+
+	if _, err := exec.LookPath("flatc"); err != nil {
+		t.Skip("flatc not installed")
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "protocol.fbs"), []byte(msgSchema), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	verifier, err := NewVerifier(VerifierOptions{GovernanceDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, cleanup, err := verifier.loadSchema(context.Background(), &Suite{Schema: "protocol.bfbs"})
+	if err != nil {
+		t.Fatalf("loadSchema: %v", err)
+	}
+	defer cleanup()
+	if schema.Root == nil || ShortName(schema.Root.Name) != "Msg" {
+		t.Fatalf("root = %+v", schema.Root)
+	}
+}
 
 func TestVerifierServerMode(t *testing.T) {
 	t.Parallel()

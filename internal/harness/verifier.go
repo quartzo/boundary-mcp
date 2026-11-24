@@ -117,6 +117,15 @@ func (v *Verifier) loadSchema(ctx context.Context, suite *Suite) (*Schema, func(
 		path = filepath.Join(v.opts.GovernanceDir, path)
 	}
 
+	if strings.HasSuffix(strings.ToLower(path), ".bfbs") {
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			fbsPath := strings.TrimSuffix(path, ".bfbs") + ".fbs"
+			if _, err := os.Stat(fbsPath); err == nil {
+				path = fbsPath
+			}
+		}
+	}
+
 	if strings.HasSuffix(strings.ToLower(path), ".fbs") {
 		dir, err := os.MkdirTemp("", "boundary-schema-*")
 		if err != nil {
