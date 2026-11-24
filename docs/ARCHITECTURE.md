@@ -321,9 +321,11 @@ The launcher:
 
 ### Phase 5: Litmus Test (Thesis Validation)
 
-- [ ] Author a real `purpose.md` spanning 2 actors (`actor_ingest` in Go + `actor_enrich` in Rust or Go).
+- [x] Author a real `purpose.md` spanning 2 actors (`actor_ingest` in Go + `actor_enrich` in Rust or Go). See `examples/litmus/`.
 - [ ] Implement both actors in separate `sandbox-run` sessions.
 - [ ] **Disposability Test:** Wipe `actors/actor_enrich/*` completely, launch a fresh `sandbox-run actor_enrich` session, and verify that the new agent reconstructs the actor from scratch and passes 100% of hidden boundary tests without touching `actor_ingest`.
+
+`examples/litmus/` is the Phase 5a fixture: contract, two Go actors, hidden suites and `make litmus`. Phase 5b adds the sandboxed reconstruction and disposability run.
 
 ### Proposed (not part of the MVP): Advisory Semantic Judge (ADR-0001)
 

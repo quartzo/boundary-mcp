@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 4 complete.** `internal/harness` parses `.bfbs` reflection, builds and mutates FlatBuffer frames dynamically, and provides two verification engines: `HarnessClient` for receiver actors and `ReferenceMockPeer` for emitter actors. `verify_actor_behavior` is wired through trusted JSON suites under `governance/hidden_tests/`. Verification subprocesses currently run on the host; sandboxing them is the remaining hardening step. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Phase 5a complete.** `examples/litmus/` contains a self-contained two-actor boundary (`actor_ingest` + `actor_enrich`), the contract, hidden suites and a deterministic `make litmus` acceptance run. Phase 5b — the sandboxed agent reconstruction and disposability test — is the next milestone. See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -65,6 +65,8 @@ The target layout (see the architecture document for details):
 .
 ├── docs/
 │   └── ARCHITECTURE.md      # Design specification
+├── examples/
+│   └── litmus/              # two-actor acceptance example and hidden suites
 ├── governance/              # (planned) source of truth: purpose, schema, tests
 ├── sdk/                     # (planned) generated FlatBuffers bindings
 ├── actors/                  # (planned) one isolated sandbox per actor
@@ -93,8 +95,8 @@ The target layout (see the architecture document for details):
 
 ```bash
 make build       # build bin/boundary-mcp
-go test ./...    # run the test suite
-go vet ./...
+make test        # run the test suite
+make litmus      # regenerate the example SDK and run the acceptance example
 ```
 
 Unit tests use an injected command runner and do not require `flatc`. The integration tests in `internal/fbs` exercise a real `flatc` and run automatically when it is on `PATH`; they are skipped otherwise.
@@ -154,6 +156,7 @@ Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` 
 ## Documentation
 
 - [Architecture specification](docs/ARCHITECTURE.md) — topology, contracts, tool specs, isolation model, and roadmap.
+- [Litmus example](examples/litmus/README.md) — two-actor acceptance fixture and hidden suites.
 - [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — proposed JEV / System One layer; not part of the current design.
 - [ADR index](docs/adr/README.md) — conventions and decision history.
 

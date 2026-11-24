@@ -1,0 +1,72 @@
+{
+  "mode": "client",
+  "schema": "protocol.fbs",
+  "build": "go build -o bin/actor .",
+  "run": ["./bin/actor"],
+  "timeout_ms": 2000,
+  "scenarios": [
+    {
+      "name": "happy-path",
+      "expectations": [
+        {
+          "name": "request",
+          "table": "Envelope",
+          "checks": [
+            { "field": "type", "equals": 1 },
+            { "field": "request.correlation_id", "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+            { "field": "request.document_id", "regex": "^[0-9]{14}$" }
+          ],
+          "response": [
+            {
+              "table": "Envelope",
+              "values": {
+                "type": "RESPONSE",
+                "response": {
+                  "correlation_id": "0192f0a0-0000-7000-8000-000000000001",
+                  "document_id": "12345678901234",
+                  "confidence_score": 0.92,
+                  "display_name": "Example Corp"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "retry-after-timeout",
+      "expectations": [
+        {
+          "name": "first-attempt",
+          "table": "Envelope",
+          "checks": [
+            { "field": "request.document_id", "regex": "^[0-9]{14}$" }
+          ],
+          "delay_ms": 600,
+          "response": []
+        },
+        {
+          "name": "retry",
+          "table": "Envelope",
+          "checks": [
+            { "field": "request.document_id", "regex": "^[0-9]{14}$" }
+          ],
+          "response": [
+            {
+              "table": "Envelope",
+              "values": {
+                "type": "RESPONSE",
+                "response": {
+                  "correlation_id": "0192f0a0-0000-7000-8000-000000000001",
+                  "document_id": "12345678901234",
+                  "confidence_score": 0.92,
+                  "display_name": "Example Corp"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

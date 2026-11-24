@@ -33,3 +33,6 @@ vendor/
 
 # Sandbox runtime state
 .sandbox/
+
+# Litmus actor build output
+examples/litmus/actors/*/bin/

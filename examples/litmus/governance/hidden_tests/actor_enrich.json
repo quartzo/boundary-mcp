@@ -1,0 +1,20 @@
+{
+  "mode": "server",
+  "schema": "protocol.fbs",
+  "response_table": "Envelope",
+  "build": "go build -o bin/actor .",
+  "run": ["./bin/actor"],
+  "timeout_ms": 2000,
+  "seeds": [
+    {
+      "table": "Envelope",
+      "values": {
+        "type": "REQUEST",
+        "request": {
+          "correlation_id": "0192f0a0-0000-7000-8000-000000000001",
+          "document_id": "12345678901234"
+        }
+      }
+    }
+  ]
+}
