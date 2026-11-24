@@ -283,11 +283,11 @@ bwrap \
 
 ### Phase 1: Deterministic Core & CLI (`internal/fbs`)
 
-- [ ] Initialize Go module (`go mod init boundary-mcp`).
-- [ ] Implement wrapper around `flatc`:
-  - Code generation (`--go`, `--rust`).
-  - Schema evolution enforcement (`flatc --conform old.fbs new.fbs`).
-- [ ] Implement standard binary framing (`[4-byte length][FlatBuffer payload]`) for transport-agnostic IPC (Unix Socket / stdio / NATS).
+- [x] Initialize Go module (`go mod init boundary-mcp`).
+- [x] Implement wrapper around `flatc`:
+  - [x] Code generation (`--go`, `--rust`).
+  - [x] Schema evolution enforcement (`flatc --conform old.fbs new.fbs`).
+- [x] Implement standard binary framing (`[4-byte length][FlatBuffer payload]`) for transport-agnostic IPC (Unix Socket / stdio / NATS).
 
 ### Phase 2: MCP Server & Sandbox (`internal/mcp` & `cmd/sandbox-run`)
 

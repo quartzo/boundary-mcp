@@ -6,7 +6,7 @@
 
 ## Status
 
-**Design phase.** The architecture is specified in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Implementation begins with Phase 1 (deterministic core & CLI); this repository currently contains the specification and the Go module scaffolding.
+**Phase 1 complete.** The deterministic core lives in [`internal/fbs`](internal/fbs): a `flatc` wrapper (code generation, `.bfbs` reflection output, and a `--conform` compatibility gate) plus the `[uint32 LE length][FlatBuffer payload]` framing used between actors. The next milestone is Phase 2 (MCP server and sandbox launcher). See the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why
 
@@ -54,7 +54,7 @@ The target layout (see the architecture document for details):
 │   └── sandbox-run/         # (planned) bwrap/container launcher
 └── internal/
     ├── compiler/            # (planned) purpose.md <-> protocol.fbs
-    ├── fbs/                 # (planned) flatc wrapper and framing
+    ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
     ├── harness/             # (planned) deterministic test runner
     └── mcp/                 # (planned) MCP tool handlers
 ```
@@ -68,12 +68,12 @@ The target layout (see the architecture document for details):
 
 ## Development
 
-The Go module is initialized, but no packages exist yet. Once implementation lands:
-
 ```bash
 go build ./...   # build all packages
 go test ./...    # run the test suite
 ```
+
+The `internal/fbs` unit tests do not require `flatc` on the host: the compiler is exercised through an injected command runner. A real `flatc` is only needed for integration and generated bindings.
 
 ## Documentation
 
