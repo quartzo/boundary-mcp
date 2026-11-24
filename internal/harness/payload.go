@@ -217,8 +217,37 @@ func (s *Schema) ReadString(payload []byte, fieldName string) (value string, err
 	return (&decoder{b: payload}).stringAt(pos), nil
 }
 
+// ReadFieldFor reads a scalar or string field from the named table.
+func (s *Schema) ReadFieldFor(payload []byte, tableName, fieldName string) (value any, err error) {
+	defer recoverMalformed(&err)
+
+	field, pos, err := s.fieldFor(payload, tableName, fieldName)
+	if err != nil {
+		return nil, err
+	}
+	d := &decoder{b: payload}
+	switch {
+	case field.Type.Base == BaseString:
+		return d.stringAt(pos), nil
+	case field.Type.Base.IsScalar():
+		return d.scalarValue(field.Type.Base, pos), nil
+	default:
+		return nil, fmt.Errorf("harness: field %q is not scalar or string", fieldName)
+	}
+}
+
 func (s *Schema) rootField(payload []byte, fieldName string) (*Field, int, error) {
+	return s.fieldFor(payload, "", fieldName)
+}
+
+func (s *Schema) fieldFor(payload []byte, tableName, fieldName string) (*Field, int, error) {
 	obj := s.Root
+	if tableName != "" {
+		obj = s.Object(tableName)
+		if obj == nil {
+			return nil, 0, fmt.Errorf("harness: unknown table %q", tableName)
+		}
+	}
 	if obj == nil {
 		return nil, 0, errors.New("harness: schema has no root table")
 	}
@@ -226,6 +255,7 @@ func (s *Schema) rootField(payload []byte, fieldName string) (*Field, int, error
 	if field == nil {
 		return nil, 0, fmt.Errorf("harness: table %s has no field %q", ShortName(obj.Name), fieldName)
 	}
+
 	d := &decoder{b: payload}
 	pos, ok := d.fieldPos(d.root(), field.ID)
 	if !ok {

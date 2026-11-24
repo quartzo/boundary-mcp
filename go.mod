@@ -3,6 +3,7 @@ module boundary-mcp
 go 1.27.1
 
 require (
+	github.com/google/flatbuffers v25.12.19+incompatible
 	github.com/mark3labs/mcp-go v1.6.0
 	github.com/pmezard/go-difflib v1.0.0
 	pgregory.net/rapid v1.3.0

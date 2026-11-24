@@ -28,6 +28,7 @@ import (
 
 	"boundary-mcp/internal/compiler"
 	"boundary-mcp/internal/fbs"
+	"boundary-mcp/internal/harness"
 	"boundary-mcp/internal/llm"
 	"boundary-mcp/internal/mcp"
 )
@@ -39,6 +40,8 @@ func main() {
 		governanceDir = flag.String("governance", "governance", "directory containing purpose.md and protocol.fbs")
 		sdkPath       = flag.String("sdk", "/sdk", "read-only SDK mount path advertised to actors")
 		sdkOut        = flag.String("sdk-out", "sdk", "host directory for regenerated SDKs (go/ and rust/); empty disables")
+		actorsDir     = flag.String("actors", "actors", "directory containing one workspace per actor")
+		hiddenTests   = flag.String("hidden-tests", "", "hidden test suite directory (default: <governance>/hidden_tests)")
 		transport     = flag.String("transport", "stdio", "transport: stdio or http")
 		addr          = flag.String("addr", "127.0.0.1:8765", "HTTP listen address (transport=http)")
 		token         = flag.String("token", "", "bearer token for HTTP transport; empty disables auth")
@@ -73,11 +76,22 @@ func main() {
 	if comp != nil {
 		evolver = comp
 	}
+
+	verifier, err := harness.NewVerifier(harness.VerifierOptions{
+		GovernanceDir: *governanceDir,
+		ActorsDir:     *actorsDir,
+		SuitesDir:     *hiddenTests,
+	})
+	if err != nil {
+		log.Fatalf("boundary-mcp: %v", err)
+	}
+
 	srv, err := mcp.New(mcp.Options{
 		GovernanceDir: *governanceDir,
 		SDKPath:       *sdkPath,
 		Version:       version,
 		Evolver:       evolver,
+		Verifier:      verifier,
 	})
 	if err != nil {
 		log.Fatalf("boundary-mcp: %v", err)

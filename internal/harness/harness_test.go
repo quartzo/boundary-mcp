@@ -43,6 +43,12 @@ root_type Payload;
 
 func compileSchema(t *testing.T, source string) *Schema {
 	t.Helper()
+	_, schema := compileSchemaFile(t, source)
+	return schema
+}
+
+func compileSchemaFile(t *testing.T, source string) (string, *Schema) {
+	t.Helper()
 
 	flatc, err := exec.LookPath("flatc")
 	if err != nil {
@@ -59,11 +65,12 @@ func compileSchema(t *testing.T, source string) *Schema {
 		t.Fatalf("flatc: %v\n%s", err, out)
 	}
 
-	schema, err := LoadSchema(filepath.Join(dir, "schema.bfbs"))
+	path := filepath.Join(dir, "schema.bfbs")
+	schema, err := LoadSchema(path)
 	if err != nil {
 		t.Fatalf("LoadSchema: %v", err)
 	}
-	return schema
+	return path, schema
 }
 
 // msgPayload builds a valid FlatBuffer for msgSchema:
