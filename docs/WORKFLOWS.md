@@ -1,7 +1,5 @@
 # Protocol Evolution Workflows
 
-> **Scope change in progress (2026-11-25).** The control plane no longer launches the coder or executes actor code; §2 reflects the external-coder model. Contract management, protocol tests and the merge gate are now separate. See [PLAN.md](PLAN.md) and [ADR-0004](adr/0004-protocol-only-mcp.md).
-
 This document describes the workflows boundary-mcp is designed around. It separates what is implemented today from the target lifecycle, so the documentation does not imply that a designed step already runs.
 
 Protocol management is a subjective decision: whether a change is the **right** protocol. The workflows below separate that decision — owned by the semantic engine — from the deterministic layers that make it expressible, compatible, honored and attributable. See [ADR-0003](adr/0003-semantic-engine-as-protocol-management-core.md).
@@ -15,12 +13,12 @@ Protocol management is a subjective decision: whether a change is the **right** 
 
 | Role | Responsibility |
 | --- | --- |
-| Actor agent | Implements one actor from its boundary context, proposes contract changes, and runs the protocol test spec. |
+| Coder (user-owned) | Implements one actor in its service directory, proposes contract changes, and runs the protocol test spec. |
 | Architect / owner | Owns governance, approves promotions and aliases, and authorizes a new major line for a breaking change. |
 | `boundary-mcp` | The only agent-facing write path for the contract. Runs the compiler, gates, history, SDK regeneration and version metadata. |
 | `flatc` | Deterministic syntax/type gate and `--conform` wire-compatibility gate. |
 | Semantic engine (JEV) | The protocol-management core. Decides whether a change is the right protocol: intent fit, scope, invariants, drift and (designed) role-specific impact. It never decides wire compatibility. |
-| Harness (CI) | Black-box behavioral verification against hidden suites. Not exposed over MCP. |
+| Harness (CI) | Black-box behavioral verification against trusted suites. Not exposed over MCP. |
 
 Each layer is authoritative inside its own domain. The semantic engine decides legitimacy and can reject or escalate; `flatc` decides conformance and cannot be overruled by a semantic verdict; the harness decides behavior; versioning decides identity. None of them can overrule another's domain.
 
@@ -37,9 +35,9 @@ boundary-mcp (MCP over stdio or HTTP)
         |       - active protocol.fbs
         |       - read-only SDK path
         |
-        +--> agent implements in its service directory
+        +--> coder implements in its service directory
         |
-        +--> agent runs the protocol test spec locally
+        +--> coder runs the protocol test spec locally
         |
         +--> CI builds the actor and runs its behavioral suite
                 PASS, or a minimal counterexample
@@ -47,7 +45,7 @@ boundary-mcp (MCP over stdio or HTTP)
 
 The coder sees its own service directory; boundary-mcp exposes only that actor's boundary view and never receives the code. It does **not** expose `governance/`, other actors, or their tests. The agent cannot change the contract directly; it can only request a change through the evolution workflow.
 
-The sandboxed variant is a fixture: `examples/litmus/sandbox-run/sandbox-run.sh` mounts only the actor workspace and the read-only SDK to reproduce the Phase 5 experiment.
+The litmus example keeps a sandboxed reference runner for the Phase 5 disposability experiment; see [examples/litmus/README.md](../examples/litmus/README.md).
 
 ## 3. Proposal and auto-commit (Current)
 
@@ -77,7 +75,7 @@ atomic commit
   - purpose.md, protocol.fbs, state_machine.json
   - history/<timestamp>_<actor>/ with meta.json + diff.patch
   - regenerate SDKs
-  - OnCommit hook (stale marking placeholders)
+  - OnCommit hook (no default implementation)
         |
         v
 actor runs the protocol tests; CI runs the behavioral suite
@@ -412,7 +410,7 @@ Rules:
 | Semantic gate reject | Rejected; diagnostics returned; no commit. |
 | Semantic gate review | Escalated; no commit; human review required. |
 | Semantic gate/provider outage | Proposals fail closed. The gate is mandatory whenever the semantic compiler is enabled; there is no product off switch. |
-| Actor verification failure | Minimal counterexample returned; the actor must change, not the contract. |
+| Behavioral suite failure (CI) | Minimal counterexample returned; the actor must change, not the contract. |
 | Both artifacts edited before `-sync` | Error; the architect must choose one source of truth. |
 
 ## 12. Command reference
@@ -423,9 +421,6 @@ Rules:
 # Control plane
 ./bin/boundary-mcp -governance governance
 ./bin/boundary-mcp -transport http -addr 127.0.0.1:8765 -token "$BOUNDARY_MCP_TOKEN" -governance governance
-
-# Litmus example: sandboxed reference runner
-./examples/litmus/sandbox-run/sandbox-run.sh actor_ingest
 
 # Semantic compiler / semantic gate
 ./bin/boundary-mcp -llm-model ...
@@ -467,7 +462,8 @@ These commands are intentionally not exposed until the compiler supports draft-f
 | Capability | Status |
 | --- | --- |
 | Actor context and read-only SDK | Current |
-| Hidden-suite verification | Current |
+| Protocol test specs published as MCP resources | Current |
+| Reference behavioral verification (example/CI) | Current |
 | `propose_contract_evolution` auto-commit | Current |
 | Manual `-sync` reconciliation | Current |
 | Semantic gate (JEV) enforced when the compiler is enabled | Current |
@@ -482,4 +478,4 @@ These commands are intentionally not exposed until the compiler supports draft-f
 | `protocol_version:uint` in the envelope | Designed |
 | Breaking-change major line and dual-run | Designed |
 | Append-only event log for alias/promotion/adoption events | Designed |
-| Sandboxed verifier subprocesses | Hardening item |
+| Sandboxed verifier subprocesses in CI/example | Hardening item |

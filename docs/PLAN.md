@@ -1,6 +1,6 @@
 # Plan: Protocol-Only boundary-mcp
 
-- **Status:** Stages 1–4 implemented; Stages 5–7 pending
+- **Status:** Stages 1–5 implemented; Stages 6–7 pending
 - **Date:** 2026-11-25
 - **Decision record:** [ADR-0004](adr/0004-protocol-only-mcp.md)
 - **Supersedes in scope:** the actor-runtime and actor-verification parts of [ARCHITECTURE.md](ARCHITECTURE.md) §6–§7 and [WORKFLOWS.md](WORKFLOWS.md) §2–§3
@@ -172,14 +172,14 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 
 **Acceptance:** no product path mentions `bwrap`; the only references are the example and this plan.
 
-### Stage 5 — Rewrite the docs
+### Stage 5 — Rewrite the docs (implemented)
 
-- README: status, quick start, and the "capability isolation" claim.
-- ARCHITECTURE: replace §6–§7 with protocol testing and the external-coder model.
-- WORKFLOWS: replace the actor-verification workflow with "coder iterates on the spec; CI gates".
-- ADR index and cross-links.
+- README, ARCHITECTURE and WORKFLOWS now describe the protocol manager: contract evolution, published protocol tests, the external coder and the CI gate.
+- ARCHITECTURE §5 documents `get_protocol_tests` and the resources; §6 separates protocol tests from the reference behavioral verifier; §7 states the owner-per-layer isolation model.
+- WORKFLOWS §2 starts at the user's coder and §12 no longer exposes a sandboxed product command.
+- The "scope change in progress" banners are gone.
 
-**Acceptance:** `rg 'verify_actor_behavior|sandbox-run|physical isolation'` matches only historical ADRs, this plan, and `examples/`.
+**Acceptance:** `rg 'verify_actor_behavior|sandbox-run|physical isolation'` matches only historical ADRs, this plan, and `examples/`. Met.
 
 ### Stage 6 — Hardening that remains
 
@@ -219,4 +219,4 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 2. Does `purpose.md` filtering belong in the resource template (`boundary://actor/{name}/context`) or stay in `get_boundary_context` only? Prefer both, one implementation.
 3. Should the compatibility manifest be a resource or an on-demand tool? The manifest depends on a base version, which fits a tool better.
 4. Where do generated SDKs live? `-sdk-out` stays; the server still owns regeneration on commit.
-5. Deprecation window for `verify_actor_behavior`: remove immediately (no known external clients) or keep a stub returning `410`-style guidance for one release.
+5. Resolved in Stage 2: `verify_actor_behavior` was removed immediately; there were no external clients.

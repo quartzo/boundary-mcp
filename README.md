@@ -2,13 +2,11 @@
 
 > Purpose-driven development for actor-based distributed systems, backed by deterministic binary contracts.
 
-**boundary-mcp** is a governance control plane that lets AI coding agents (such as [`opencode`](https://opencode.ai)) build isolated actors without leaking implementation details into each other. Agents work from a verbal purpose document and a compiled schema, while actors communicate at runtime exclusively through zero-copy FlatBuffers over IPC, Unix Domain Sockets, or NATS.
-
-> **Scope change in progress (2026-11-25).** boundary-mcp is being narrowed to **protocol management and protocol testing**. The actor runtime and actor-code execution leave the control plane; the user's coder connects as an external MCP client and CI owns the merge gate. Stages 1–4 have landed: protocol test specs are published as MCP resources (`boundary://protocol/{hash}/tests`, `get_protocol_tests`), `verify_actor_behavior` is gone, the protocol core is `internal/protocol`, and the `bwrap` runner moved to `examples/litmus/sandbox-run/`. See [docs/PLAN.md](docs/PLAN.md) and [ADR-0004](docs/adr/0004-protocol-only-mcp.md).
+**boundary-mcp** is a governance control plane that lets AI coding agents (such as [`opencode`](https://opencode.ai)) build actors without leaking implementation details into each other. Agents work from a verbal purpose document and a compiled schema, while actors communicate at runtime exclusively through zero-copy FlatBuffers over IPC, Unix Domain Sockets, or NATS.
 
 ## Status
 
-**Semantic engine enforced; litmus and versioning green.** The semantic engine (`internal/judge`) is the protocol-management core: it calls JEV through OpenRouter's typed System One API to decide whether a proposal is the right protocol, while `flatc` decides whether that decision is expressible and wire-compatible. The gate is mandatory whenever the semantic compiler is enabled and fails closed. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-gate path. The Phase 5 litmus remains green. The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model, plus [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Semantic engine enforced; litmus and versioning green.** The semantic engine (`internal/judge`) is the protocol-management core: it calls JEV through OpenRouter's typed System One API to decide whether a proposal is the right protocol, while `flatc` decides whether that decision is expressible and wire-compatible. The gate is mandatory whenever the semantic compiler is enabled and fails closed. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-gate path. The Phase 5 litmus remains green. The control plane manages contracts and publishes protocol tests; the coder and CI are external ([ADR-0004](docs/adr/0004-protocol-only-mcp.md)). The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model, plus [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -27,7 +25,7 @@ In practice, this flexibility is an accounting illusion. Schemaless protocols do
 **Boundary-MCP** inverts the workflow:
 
 - **Human and AI cognitive effort is invested at the boundary**, co-evolving human-readable intent (`purpose.md`) with a strict, evolvable binary contract (`protocol.fbs`) and executable behavioral invariants.
-- **Internal actor implementations become disposable commodities**, developed in isolated sandboxes with zero visibility into neighboring internals—guaranteed to be interchangeable as long as they satisfy the boundary contract.
+- **Internal actor implementations become disposable commodities**, developed in their own service directory with zero visibility into neighboring internals—guaranteed to be interchangeable as long as they satisfy the boundary contract.
 
 ## Failure Modes Addressed
 
@@ -43,7 +41,7 @@ boundary-mcp addresses each of them:
 - **Capability-based isolation** — the coder runs in the actor's own service directory; boundary-mcp never receives actor code and only exposes that actor's boundary view.
 - **Bidirectional contracts** — `purpose.md` and `protocol.fbs` co-evolve behind deterministic gates (`flatc --conform`).
 - **Semantic gate** — whether a change is the *right* protocol (intent fit, scope, invariants, drift) is decided by a calibrated engine, not left to the implementing agent's interpretation.
-- **Black-box verification** — hidden property-based and state-machine tests run against actor binaries, with only minimal counterexamples returned to the agent.
+- **Black-box verification** — property-based and state-machine suites run against actor binaries in CI, with minimal counterexamples returned to the coder.
 
 ## Architecture at a glance
 
@@ -94,7 +92,7 @@ boundary-mcp (MCP over stdio or HTTP)
                 PASS or minimal counterexample
 ```
 
-The coder sees its own service directory; `boundary-mcp` exposes only that actor's boundary view and never receives the code. The sandboxed variant is a fixture: `examples/litmus/sandbox-run/sandbox-run.sh` mounts only the actor workspace and the read-only SDK to reproduce the Phase 5 disposability experiment.
+The coder sees its own service directory; `boundary-mcp` exposes only that actor's boundary view and never receives the code. The litmus example keeps a reproducible sandboxed runner for the Phase 5 disposability experiment; see [examples/litmus/README.md](examples/litmus/README.md).
 
 ### Evolution loop (Current)
 
@@ -190,7 +188,7 @@ A drafted change does not affect the active contract. Actors can be verified aga
 
 | Capability | Status |
 | --- | --- |
-| Actor context, sandbox and hidden-suite verification | Current |
+| Actor context, protocol test resources and reference behavioral verification | Current |
 | `propose_contract_evolution` auto-commit | Current |
 | Manual `-sync` reconciliation | Current |
 | Semantic gate (JEV) enforced with the semantic compiler | Current |
@@ -211,9 +209,6 @@ A drafted change does not affect the active contract. Actors can be verified aga
 # Control plane (stdio for a local coder; HTTP for a remote one)
 ./bin/boundary-mcp -governance governance
 ./bin/boundary-mcp -transport http -addr 127.0.0.1:8765 -token "$BOUNDARY_MCP_TOKEN" -governance governance
-
-# Litmus example: sandboxed reference runner
-./examples/litmus/sandbox-run/sandbox-run.sh actor_ingest
 
 # Evolution (single-line, current)
 ./bin/boundary-mcp -llm-model ...
@@ -244,8 +239,7 @@ The target layout (see the architecture document for details):
 │   └── ARCHITECTURE.md      # Design specification
 ├── examples/
 │   └── litmus/              # two-actor acceptance example
-│       ├── harness/         # reference behavioral verifier (example/CI only)
-│       └── sandbox-run/     # bwrap reference runner for the disposability test
+│       └── harness/         # reference behavioral verifier (example/CI only)
 ├── governance/              # (planned) source of truth: purpose, schema, tests
 ├── sdk/                     # (planned) generated FlatBuffers bindings
 ├── actors/                  # (planned) one service directory per actor (user-owned)
@@ -271,7 +265,7 @@ The target layout (see the architecture document for details):
 - **Go** 1.27 or newer
 - **FlatBuffers compiler** (`flatc`) — exercised in integration tests with 25.12.x
 - **Bubblewrap** (`bwrap`) on Linux, only for the litmus example runner
-- **opencode**, for the agent-facing workflow
+- A **coder with MCP support** (for example [`opencode`](https://opencode.ai))
 - An **OpenAI-compatible LLM endpoint** (optional), for the semantic compiler
 - An **OpenRouter API key** (required when the semantic compiler is enabled), for the semantic gate (JEV)
 
@@ -315,7 +309,7 @@ export BOUNDARY_MCP_TOKEN=$(openssl rand -hex 24)
 }
 ```
 
-`external_directory: deny` keeps the coder inside the actor's directory. That rule is the isolation boundary, and it belongs to the coder's configuration, not to the server. For the reproducible sandboxed litmus run, use `examples/litmus/sandbox-run/sandbox-run.sh actor_ingest`; `BOUNDARY_DRY_RUN=1` prints the plan without launching anything.
+`external_directory: deny` keeps the coder inside the actor's directory. That rule is the isolation boundary, and it belongs to the coder's configuration, not to the server. The litmus example ships a reproducible sandboxed runner for the disposability experiment; see [examples/litmus/README.md](examples/litmus/README.md).
 
 ## Semantic compiler
 
@@ -364,7 +358,7 @@ Protocol tests are published, not executed. The server validates every spec unde
 - `boundary://protocol/{hash}/purpose` — the full `purpose.md`
 - `boundary://actor/{name}/context` — the filtered boundary view for one actor
 
-`get_protocol_tests` is the tool fallback for clients that do not read resources. A spec is declarative: `seeds` provide valid frames, `rules` carry explicit valid/invalid examples for semantic assertions, and `mutations` select structural cases. `internal/protocoltest` expands a spec deterministically (sorted cases, base64 frames) for the coder or CI to run. The protocol-test path never builds or runs actor code; `verify_actor_behavior` still exists until Stage 2 of the [plan](docs/PLAN.md) removes it.
+`get_protocol_tests` is the tool fallback for clients that do not read resources. A spec is declarative: `seeds` provide valid frames, `rules` carry explicit valid/invalid examples for semantic assertions, and `mutations` select structural cases. `internal/protocoltest` expands a spec deterministically (sorted cases, base64 frames) for the coder or CI to run. The protocol-test path never builds or runs actor code.
 
 ## Protocol versions and compatibility
 
@@ -383,7 +377,7 @@ go run ./cmd/versionctl list -governance examples/litmus/governance
 
 Actor pins record adoption without changing the contract. The prototype does not change the compiler's auto-commit lifecycle; draft/promote/abandon and the pairwise adoption matrix are follow-ups. The litmus example includes its `v0` snapshot and actor pins under `examples/litmus/governance/`. See [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md).
 
-## Harness
+## Reference behavioral verifier
 
 `examples/litmus/harness` is the reference behavioral verifier used by the litmus example and by CI. It is no longer an MCP tool. It builds on `internal/protocol` for schema reflection, validation and frame building, and verifies actor binaries without reading their source:
 
@@ -412,9 +406,9 @@ Property tests for the protocol core use `pgregory.net/rapid`. `examples/litmus/
 
 ## Documentation
 
-- [Architecture specification](docs/ARCHITECTURE.md) — topology, layer model, tool specs, isolation model, and roadmap.
+- [Architecture specification](docs/ARCHITECTURE.md) — topology, layer model, tool and resource specs, environment and roadmap.
 - [Workflows](docs/WORKFLOWS.md) — actor loop, auto-commit evolution, versioned draft lifecycle, compatibility and breaking changes.
-- [Plan: protocol-only boundary-mcp](docs/PLAN.md) — staged re-scoping: the actor runtime and actor execution leave the control plane.
+- [Plan: protocol-only boundary-mcp](docs/PLAN.md) — the re-scoping record and staged work.
 - [Litmus example](examples/litmus/README.md) — two-actor acceptance fixture and hidden suites.
 - [ADR-0004: Protocol Manager, Not an Agent Runtime or CI](docs/adr/0004-protocol-only-mcp.md) — target scope and the external-coder model.
 - [ADR-0003: Semantic Engine as Protocol-Management Core](docs/adr/0003-semantic-engine-as-protocol-management-core.md) — the four layers and their authority split.

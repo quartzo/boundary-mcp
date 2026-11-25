@@ -1,7 +1,5 @@
 # Boundary-MCP: Purpose-Driven Development Architecture with Deterministic Binary Contracts
 
-> **Scope change in progress (2026-11-25).** This specification still describes the actor runtime and actor-behavior verification that [ADR-0004](adr/0004-protocol-only-mcp.md) removes from the control plane. §6 (test induction) and §7 (physical isolation) are the sections most affected. The target architecture and staged work are in [PLAN.md](PLAN.md); treat this document as the current implementation until the plan's stages land.
-
 ## Contents
 
 1. [Overview and Architectural Thesis](#1-overview-and-architectural-thesis)
@@ -9,7 +7,7 @@
 3. [Repository Directory Structure](#3-repository-directory-structure)
 4. [Verbal Source of Truth Format](#4-verbal-source-of-truth-format)
 5. [boundary-mcp Tool Specifications](#5-boundary-mcp-tool-specifications)
-6. [Deterministic Test Induction and Execution Engine](#6-deterministic-test-induction-and-execution-engine)
+6. [Protocol Tests and the Reference Verifier](#6-protocol-tests-and-the-reference-verifier)
 7. [Environment and Isolation](#7-environment-and-isolation)
 8. [Implementation Roadmap (Go MVP)](#8-implementation-roadmap-go-mvp)
 
@@ -31,7 +29,7 @@ The system solves three structural failure modes in current LLM-assisted softwar
 - **Separation of Design Plane and Data Plane:** The semantic engine and its gates operate exclusively at design/governance time. At *runtime*, processes (black boxes) communicate strictly via **FlatBuffers** (*zero-copy* binary) over IPC, Unix Domain Sockets, or NATS.
 - **Capability-Based Isolation:** The user's coder runs in the actor's own service directory and connects over MCP. The control plane never receives actor code and exposes only that actor's boundary view. A `bwrap` runner for the disposability experiment lives under `examples/litmus/`.
 - **Bidirectional Synchronization (`purpose.md` ↔ `protocol.fbs`):** The verbal purpose document and the binary schema co-evolve through a semantic compiler encapsulated behind deterministic gatekeepers (`flatc --conform`).
-- **Blind Behavioral Verification (Black-Box Testing):** The MCP server induces and executes deterministic state-machine and property-based tests against actor binaries (both as client and server), hiding fuzzing vectors from the implementing agent to prevent overfitting.
+- **Blind Behavioral Verification (Black-Box Testing):** The reference verifier and CI induce and execute deterministic state-machine and property-based tests against actor binaries (both as client and server), hiding fuzzing vectors from the implementing coder to prevent overfitting.
 
 ---
 
@@ -48,27 +46,27 @@ The system solves three structural failure modes in current LLM-assisted softwar
 | |                        |                           |                 | |
 | |            [Semantic Engine (JEV gate)]        [flatc CLI]           | |
 | |                        |                           |                 | |
-| |            [Boundary Test Generator]       [Read-Only SDKs]          | |
+| |            [Protocol Tests (resources)]     [Read-Only SDKs]         | |
 | |                        |                                             | |
-| |         [Deterministic Harness (rapid)]                              | |
+| |                  [History / Versions]                                | |
 | +----------------------------------------------------------------------+ |
 +-----------------^--------------------------------------^-----------------+
                   | MCP (stdio/HTTP)                     | MCP (stdio/HTTP)
-                  | MCP (Boundary)                       | MCP (Boundary)
+                  |                                      |
 +-----------------------------------+  +-----------------------------------+
-|     ACTOR A SANDBOX (opencode)    |  |     ACTOR B SANDBOX (opencode)    |
+|      CODER A (user-owned)         |  |      CODER B (user-owned)         |
 |                                   |  |                                   |
-|  - /workspace/actor_a (RW)        |  |  - /workspace/actor_b (RW)        |
-|  - /sdk/generated (RO)            |  |  - /sdk/generated (RO)            |
-|  - No visibility into Actor B     |  |  - No visibility into Actor A     |
-|  - No access to hidden tests      |  |  - No access to hidden tests      |
+|  - its own service directory (RW) |  |  - its own service directory (RW) |
+|  - generated SDK (RO)             |  |  - generated SDK (RO)             |
+|  - no visibility into Coder B     |  |  - no visibility into Coder A     |
+|  - no access to governance        |  |  - no access to governance        |
 +-----------------------------------+  +-----------------------------------+
-
-===========================================================================
-                       DATA PLANE (Runtime / Production)
-===========================================================================
-
-  [Actor A Binary] =====( Zero-Copy FlatBuffers / NATS / IPC )=====> [Actor B Binary]
+                  |                                      |
+                  v                                      v
++--------------------------------------------------------------------------+
+|                        CI (merge gate)                                   |
+|   builds each actor, runs its behavioral suite, blocks on failure        |
++--------------------------------------------------------------------------+
 ```
 
 ---
@@ -77,25 +75,32 @@ The system solves three structural failure modes in current LLM-assisted softwar
 
 ```text
 boundary-system/
-├── governance/                     # INVISIBLE to actor sandboxes
+├── governance/                     # never exposed to coders
 │   ├── purpose.md                  # Verbal source of truth (actors, flows, invariants)
 │   ├── protocol.fbs                # Canonical FlatBuffers schema
 │   ├── state_machine.json          # Induced state machine and invariants
-│   ├── history/                    # Versioned snapshots (purpose + fbs + diff)
-│   └── hidden_tests/               # Generated property-based test suites & oracles
-├── sdk/                            # Mounted as READ-ONLY inside sandboxes
+│   ├── history/                    # Committed snapshots (artifacts + diff + meta)
+│   └── protocol_tests/             # Normative specs served as resources
+├── sdk/                            # Generated bindings consumed by the coder
 │   ├── go/                         # Code generated via `flatc --go`
 │   └── rust/                       # Code generated via `flatc --rust`
-├── actors/                         # Each subdirectory is mounted in isolation
-│   ├── actor_ingest/               # Sandbox 1 (e.g., Go)
-│   └── actor_enrich/               # Sandbox 2 (e.g., Rust or Go)
+├── actors/                         # One service directory per actor (user-owned)
 ├── cmd/
-│   └── boundary-mcp/               # Main MCP server in Go
+│   ├── boundary-mcp/               # MCP server in Go
+│   ├── judge-eval/                 # Labeled proposal benchmark for JEV
+│   └── versionctl/                 # Content-addressed versions and aliases
+├── examples/
+│   └── litmus/                     # Two-actor fixture and reference verifier
 └── internal/
-    ├── compiler/                   # Bidirectional bridge purpose.md <-> protocol.fbs
-    ├── fbs/                        # Deterministic wrapper for `flatc` and `--conform`
+    ├── compiler/                   # purpose.md <-> protocol.fbs semantic compiler
+    ├── fbs/                        # Deterministic wrapper for `flatc`
+    ├── governance/                 # purpose.md parser and actor filtering
+    ├── judge/                      # Semantic gate (JEV)
+    ├── llm/                        # OpenAI-compatible structured-output client
+    ├── mcp/                        # MCP tools, resources and HTTP auth
     ├── protocol/                   # .bfbs reflection, frame builder, validation
-    └── mcp/                        # MCP tool definitions and handlers
+    ├── protocoltest/               # Protocol test spec and deterministic expansion
+    └── versioning/                 # Versions, aliases, compatibility manifests
 ```
 
 ---
@@ -147,7 +152,7 @@ Returns exclusively the boundary view relevant to the requesting actor.
 
 1. Reads `governance/purpose.md` and filters only the actors, messages, and invariants touching `actor_name`.
 2. Returns the full contents of `governance/protocol.fbs`.
-3. Returns the local mount path where compiled bindings reside in read-only mode (`/sdk/...`).
+3. Returns the SDK path advertised by `-sdk`; the coder's project consumes it read-only.
 
 ### 5.2 `propose_contract_evolution`
 
@@ -173,21 +178,35 @@ The sole mechanism through which an agent can request changes to the protocol or
 4. **Bidirectional Commit:** Upon passing validation:
    - Writes `governance/protocol.fbs`, `governance/purpose.md` and `governance/state_machine.json` atomically.
    - Saves a snapshot under `governance/history/<timestamp>_<actor>/` with the three artifacts, a human-readable `diff.patch` and a `meta.json` (intent, direction, model, affected invariants).
-   - Recompiles SDKs into `/sdk/go` and `/sdk/rust` (host paths: `sdk/go` and `sdk/rust`).
-   - Regenerates boundary tests in `governance/protocol_tests/` (Phase 4 hook).
-   - Marks dependent consumer actors as `STALE` in the MCP's internal state (Phase 4 hook).
+   - Recompiles the configured SDK targets.
+   - Runs the `OnCommit` hook; the default binary registers none.
 
-### 5.3 `verify_actor_behavior` (removed)
+### 5.3 `get_protocol_tests` and protocol resources
 
-`verify_actor_behavior` is no longer an MCP tool. The server does not build or run actor code. Behavioral verification is a reference tool (`examples/litmus/harness`, driven by `examples/litmus/verify`) built on `internal/protocol`; the user's CI runs it against the actor directory. See [ADR-0004](adr/0004-protocol-only-mcp.md) and [PLAN.md](PLAN.md).
+`get_protocol_tests` returns the normative protocol test specs for the active content hash. It is the tool fallback for clients that do not read resources.
+
+**Input:** none.
+
+**Behavior:** validates every spec under `governance/protocol_tests/*.json` and returns `{ "protocol": "<hash>", "specs": { "<name>": <spec> } }`.
+
+The same content is available as resources addressed by the bundle content hash, so a URI always names the same contract:
+
+| URI | Content |
+| --- | --- |
+| `boundary://protocol/{hash}/fbs` | `protocol.fbs` and, when present, the compiled `.bfbs` |
+| `boundary://protocol/{hash}/purpose` | the full `purpose.md` |
+| `boundary://protocol/{hash}/tests` | the normative protocol test specs |
+| `boundary://actor/{actor}/context` | the filtered boundary view for one actor |
+
+The server serves only the active hash. Historical versions are a follow-up.
 
 ### 5.4 `sync_from_manual_edit` (Administrative Trigger / CLI)
 
 Invoked by the human architect (or a file watcher) whenever `purpose.md` or `protocol.fbs` is edited directly.
 
 1. Detects which artifact was modified most recently (mtime / SHA-256 hash).
-2. If `purpose.md` changed → compiles updates to `protocol.fbs` + tests.
-3. If `protocol.fbs` changed → decompiles the semantic diff and updates `purpose.md` + tests.
+2. If `purpose.md` changed → compiles updates to `protocol.fbs` and `state_machine.json`.
+3. If `protocol.fbs` changed → decompiles the semantic diff and updates `purpose.md` and `state_machine.json`.
 
 ### 5.5 Versioned evolution (prototype)
 
@@ -201,41 +220,39 @@ The end-to-end workflows — actor development, current auto-commit, designed dr
 
 ---
 
-## 6. Deterministic Test Induction and Execution Engine
+## 6. Protocol Tests and the Reference Verifier
 
-To ensure black-box actors respect both structural types and temporal semantics, the reference verifier (`examples/litmus/harness`, built on `internal/protocol`) implements two verification modes driven by `.fbs` reflection and `state_machine.json`. The package parses `.bfbs` into an in-memory schema, validates payloads, generates structural mutations and exposes a **Harness Client** (receivers) and a **Reference Mock Peer** (emitters) over length-prefixed Unix-socket framing.
+The system has two test layers with different owners:
 
-### 6.1 Testing an Actor as Server (Receiver)
+| Layer | Owner | Nature |
+| --- | --- | --- |
+| Protocol tests | boundary-mcp publishes; coder and CI run | Declarative, normative, no process |
+| Behavioral verification | user's CI (reference implementation in `examples/litmus/harness`) | Builds and runs actor binaries |
 
-`boundary-mcp` acts as a **Harness Client + Structured Fuzzer** (using `pgregory.net/rapid` in Go):
+### 6.1 Protocol test specs
 
-- The actor binary is spawned as an isolated child process attached to binary IPC channels (Unix Domain Socket or length-prefixed `stdin`/`stdout` framing: `uint32` little-endian length + FlatBuffer payload).
-- **Structural Mutation Tests:** Dispatches valid buffers, buffers with omitted optional fields, extreme Unicode strings, boundary numeric values (`0`, `-1`, `MaxUint64`), and truncated/corrupted frames, verifying that the actor never panics and cleanly drops malformed input or returns a typed error.
-- **Domain Invariant Tests:** For each `INV-XX` extracted from `purpose.md`, the generator synthesizes targeted inputs.
-  - Example (`INV-02`): Generates 100 `EnrichRequest` frames with `document_id` lengths of `0`, `13`, `15` and non-numeric characters, asserting 100% return `ErrorCode.INVALID_DOCUMENT` with latency `< 5ms`.
-- **Idempotency Tests (`INV-04`):** Replays the exact same binary frame *N* times and asserts byte-for-byte identical response buffers.
+A spec is declarative data, not a runner. The server validates `governance/protocol_tests/*.json` and serves them as resources. A spec contains:
 
-### 6.2 Testing an Actor as Client (Emitter)
+- `seeds`: valid frames (table + values) that structural cases derive from;
+- `rules`: semantic assertions with explicit valid/invalid examples, plus optional `regex`, `format`, `min` and `max` used to validate those examples;
+- `mutations`: structural categories to generate (`truncate`, `bad-offset`, `invalid-utf8`, `flip`, `scalar-bounds`);
+- `roundtrip`: whether the runner must decode the frame and read the fields back;
+- `generation.cases`: an optional consistency check on the expanded count.
 
-`boundary-mcp` spins up a **Reference Mock Peer** — a state-machine mock that implements the contract as the reference counterpart. The mock is the *test oracle*: it knows the expected transitions and returns the verdict.
+`internal/protocoltest` expands a spec deterministically into base64 frames with `accept`/`reject` expectations and semantic assertions, using `.bfbs` reflection, the dynamic builder and structural mutations from `internal/protocol`. Two runners given the same spec and schema produce the same case set.
 
-1. The client actor is launched and pointed at the Reference Mock Peer's socket.
-2. The mock peer executes a battery of protocol scenarios derived from `state_machine.json`:
-   - **Happy Path:** Accepts `EnrichRequest`, validates that outgoing fields satisfy `INV-01` and `INV-03`, and emits `EnrichResponse`.
-   - **Domain Error Path:** Returns `EnrichError` and verifies the client transitions cleanly to a terminal state without infinite retry loops.
-   - **Latency / Timeout Path (`INV-05`):** Deliberately holds the response for 600ms and counts retry attempts, failing the test if the client exceeds 2 retries or violates backoff bounds.
-   - **Sequence Violation Path:** Injects an out-of-order frame or unknown `correlation_id` and verifies the client rejects it without corrupting internal state.
+The server never expands, builds or executes anything for a spec. Expansion belongs to the coder and CI.
 
-### 6.3 Strategy for External Actors (Legacy Systems / Third-Party APIs)
+### 6.2 Reference behavioral verifier
 
-When a node in the topology represents an external service that does not natively speak FlatBuffers:
+`examples/litmus/harness` is the reference implementation of the behavioral layer. It is example infrastructure and the basis for the litmus CI, not an MCP tool.
 
-- `actors/actor_external_crm` houses strictly a thin **Boundary Adapter** (Anti-Corruption Layer).
-- `boundary-mcp` verifies this adapter against a local HTTP/gRPC mock simulating real upstream payloads and fault modes, guaranteeing that translation into internal FlatBuffers is 100% deterministic and free of external schema leakage.
+- **Server mode:** the verifier acts as a Harness Client, sends valid seeds and malformed frames, and checks that the actor never panics and drops or types-invalidates input correctly.
+- **Client mode:** the verifier acts as a Reference Mock Peer, scripts request/response scenarios and checks emitted frames with declarative assertions (`regex`, `min`, `max`, `equals`).
+- Frames are built dynamically from `.bfbs`: suites carry field values, not base64 payloads.
+- `build` and `run` are trusted suite values. The verifier is not agent-facing.
 
-### 6.4 Hidden Test Suites (`governance/hidden_tests/<actor>.json`)
-
-The reference verifier (`examples/litmus/verify`) loads a trusted suite per actor:
+Example suite:
 
 ```json
 {
@@ -251,10 +268,18 @@ The reference verifier (`examples/litmus/verify`) loads a trusted suite per acto
 }
 ```
 
-- Frames are **built dynamically** from `.bfbs`: suites carry field values, not base64 payloads.
-- `mode: "server"` runs the Harness Client; `mode: "client"` runs the Reference Mock Peer with `scenarios` and declarative checks (`regex`, `min`, `max`, `equals`).
 - The actor receives `BOUNDARY_SOCKET`, and `{socket}` placeholders are substituted in `run`.
-- `build` and `run` are trusted governance values. The verifier is no longer agent-facing; pin `build` in the suite so the reference runner never executes a command supplied at request time.
+- Property tests for the protocol core use `pgregory.net/rapid`.
+
+### 6.3 External actors
+
+When a node is an external service, its actor is a thin boundary adapter. The behavioral suite can point it at a local HTTP/gRPC mock, so translation into internal FlatBuffers stays deterministic and no external schema leaks into the internal protocol.
+
+### 6.4 Ownership
+
+- The server owns the spec and its version.
+- The coder runs the spec during development.
+- CI runs the behavioral suite and decides whether a merge proceeds.
 
 ---
 
@@ -271,7 +296,7 @@ Isolation is split by owner:
 | Interface access | boundary-mcp | bearer token; scope it to one actor when HTTP is exposed beyond loopback |
 | Code execution | user's CI | the control plane never builds or runs actor code |
 
-The reference runner under `examples/litmus/sandbox-run/` reproduces the Phase 5 disposability experiment with **Bubblewrap (`bwrap`)**: it mounts only the actor workspace and the read-only SDK, keeps `governance/` outside the mount namespace, and connects over a bearer-protected loopback endpoint. It is example infrastructure, not the supported deployment model.
+The litmus example keeps a reference runner under `examples/litmus/` that reproduces the Phase 5 disposability experiment with **Bubblewrap (`bwrap`)**: it mounts only the actor workspace and the read-only SDK, keeps `governance/` outside the mount namespace, and connects over a bearer-protected loopback endpoint. It is example infrastructure, not the supported deployment model.
 
 > The example runner shares the host network namespace to reach the loopback endpoint. Sandboxing it further is tracked in the plan.
 
@@ -287,12 +312,12 @@ The reference runner under `examples/litmus/sandbox-run/` reproduces the Phase 5
 - [x] Implement wrapper around `flatc`:
   - [x] Code generation (`--go`, `--rust`).
   - [x] Schema evolution enforcement (`flatc --conform old.fbs new.fbs`).
-- [x] Implement standard binary framing (`[4-byte length][FlatBuffer payload]`) for transport-agnostic IPC (Unix Socket / stdio / NATS).
+- [x] Implement standard binary framing (`[4-byte length][FlatBuffer payload]`) for transport-agnostic IPC (later moved to `examples/litmus/harness/`).
 
-### Phase 2: MCP Server & Reference Runner (`internal/mcp` & `examples/litmus/sandbox-run`)
+### Phase 2: MCP Server & Reference Runner (`internal/mcp` & `examples/litmus/`)
 
 - [x] Build Go MCP server (using `github.com/mark3labs/mcp-go`) exposing `get_boundary_context` and `propose_contract_evolution` over stdio and loopback Streamable HTTP (protocol resources and `get_protocol_tests` were added later).
-- [x] Create the `sandbox-run` wrapper with `bwrap` and an `opencode.json` template wired to the `boundary-mcp` binary (later moved under `examples/litmus/` as the reference runner).
+- [x] Create the sandboxed reference runner with `bwrap` and an `opencode.json` template wired to the `boundary-mcp` binary (in `examples/litmus/`).
 
 ### Phase 3: Bidirectional Semantic Compiler (`internal/compiler`)
 
@@ -336,4 +361,4 @@ Its authority is bounded by domain, not by rank: `flatc` remains the conformance
 
 ### Implementation Note for Phase 4
 
-One particularly useful feature of `flatc` for `internal/protocol` is **`--binary --schema`**, which compiles any `.fbs` into a self-describing `.bfbs` (*Binary FlatBuffer Schema*). Using FlatBuffers' official reflection schema (`reflection.fbs`), the Go harness can **dynamically inspect tables, field types, enums, and default values at runtime** without recompiling `boundary-mcp` whenever a contract evolves — making the structured fuzzer and Reference Mock Peer generic across any protocol you define.
+One particularly useful feature of `flatc` for `internal/protocol` is **`--binary --schema`**, which compiles any `.fbs` into a self-describing `.bfbs` (*Binary FlatBuffer Schema*). Using FlatBuffers' official reflection schema (`reflection.fbs`), the Go harness can **dynamically inspect tables, field types, enums, and default values at runtime** without recompiling `boundary-mcp` whenever a contract evolves — making the structured fuzzer and Reference Mock Peer in the example generic across any protocol you define.
