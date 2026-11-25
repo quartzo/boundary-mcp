@@ -4,7 +4,7 @@
 
 **boundary-mcp** is a governance control plane that lets AI coding agents (such as [`opencode`](https://opencode.ai)) build isolated actors without leaking implementation details into each other. Agents work from a verbal purpose document and a compiled schema, while actors communicate at runtime exclusively through zero-copy FlatBuffers over IPC, Unix Domain Sockets, or NATS.
 
-> **Scope change in progress (2026-11-25).** boundary-mcp is being narrowed to **protocol management and protocol testing**. The actor runtime and actor-code execution leave the control plane; the user's coder connects as an external MCP client and CI owns the merge gate. Stages 1–2 have landed: normative protocol test specs are published as MCP resources (`boundary://protocol/{hash}/tests`, `get_protocol_tests`), and `verify_actor_behavior` has been removed. The behavioral verifier runs from `examples/litmus/verify` or CI. See [docs/PLAN.md](docs/PLAN.md) and [ADR-0004](docs/adr/0004-protocol-only-mcp.md). Until the remaining stages land, the sections below that describe the `sandbox-run` product path document the current code, not the target.
+> **Scope change in progress (2026-11-25).** boundary-mcp is being narrowed to **protocol management and protocol testing**. The actor runtime and actor-code execution leave the control plane; the user's coder connects as an external MCP client and CI owns the merge gate. Stages 1–4 have landed: protocol test specs are published as MCP resources (`boundary://protocol/{hash}/tests`, `get_protocol_tests`), `verify_actor_behavior` is gone, the protocol core is `internal/protocol`, and the `bwrap` runner moved to `examples/litmus/sandbox-run/`. See [docs/PLAN.md](docs/PLAN.md) and [ADR-0004](docs/adr/0004-protocol-only-mcp.md).
 
 ## Status
 
@@ -40,7 +40,7 @@ LLM-assisted software engineering tends to fail in three predictable ways:
 boundary-mcp addresses each of them:
 
 - **Design plane vs. data plane** — the semantic engine and its gates operate only at design/governance time. Runtime is pure binary.
-- **Capability-based isolation** — each actor is developed in a `bwrap`/container sandbox that cannot see other actors and has read-only access to SDK bindings.
+- **Capability-based isolation** — the coder runs in the actor's own service directory; boundary-mcp never receives actor code and only exposes that actor's boundary view.
 - **Bidirectional contracts** — `purpose.md` and `protocol.fbs` co-evolve behind deterministic gates (`flatc --conform`).
 - **Semantic gate** — whether a change is the *right* protocol (intent fit, scope, invariants, drift) is decided by a calibrated engine, not left to the implementing agent's interpretation.
 - **Black-box verification** — hidden property-based and state-machine tests run against actor binaries, with only minimal counterexamples returned to the agent.
@@ -64,11 +64,11 @@ boundary-mcp addresses each of them:
 
 The semantic engine decides *whether a change is legitimate*. `flatc`, the harness and the version store make that decision expressible, honored and attributable. They are not an appendix to a deterministic core; they are the gates and the ledger the engine drives. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md).
 
-Each agent session sees only:
+Each coder session sees only:
 
-- its own `/workspace` (read-write),
-- the generated SDK under `/sdk` (read-only),
-- a filtered boundary context served by `boundary-mcp` over a bearer-protected loopback endpoint.
+- its own service directory (read-write),
+- the generated SDK, mounted read-only by the project,
+- a filtered boundary context served by `boundary-mcp` over MCP.
 
 ## Workflows
 
@@ -77,15 +77,15 @@ Each agent session sees only:
 ### Actor loop (Current)
 
 ```text
-sandbox-run actor_x
+coder in actors/actor_x/ (user-owned)
         |
         v
-boundary-mcp outside the sandbox
+boundary-mcp (MCP over stdio or HTTP)
         |
         +--> get_boundary_context(actor_x)
         |       filtered purpose + active protocol + read-only SDK
         |
-        +--> agent implements in /workspace
+        +--> agent implements in its service directory
         |
         +--> agent runs the protocol test spec locally
         |       boundary://protocol/{hash}/tests
@@ -94,7 +94,7 @@ boundary-mcp outside the sandbox
                 PASS or minimal counterexample
 ```
 
-The sandbox has no access to `governance/`, other actors, or their tests. An actor cannot edit the contract; it can only request a change through the evolution loop.
+The coder sees its own service directory; `boundary-mcp` exposes only that actor's boundary view and never receives the code. The sandboxed variant is a fixture: `examples/litmus/sandbox-run/sandbox-run.sh` mounts only the actor workspace and the read-only SDK to reproduce the Phase 5 disposability experiment.
 
 ### Evolution loop (Current)
 
@@ -208,8 +208,12 @@ A drafted change does not affect the active contract. Actors can be verified aga
 ### Essential commands
 
 ```bash
-# Actor session
-./cmd/sandbox-run/sandbox-run.sh actor_ingest
+# Control plane (stdio for a local coder; HTTP for a remote one)
+./bin/boundary-mcp -governance governance
+./bin/boundary-mcp -transport http -addr 127.0.0.1:8765 -token "$BOUNDARY_MCP_TOKEN" -governance governance
+
+# Litmus example: sandboxed reference runner
+./examples/litmus/sandbox-run/sandbox-run.sh actor_ingest
 
 # Evolution (single-line, current)
 ./bin/boundary-mcp -llm-model ...
@@ -240,15 +244,15 @@ The target layout (see the architecture document for details):
 │   └── ARCHITECTURE.md      # Design specification
 ├── examples/
 │   └── litmus/              # two-actor acceptance example
-│       └── harness/         # reference behavioral verifier (example/CI only)
+│       ├── harness/         # reference behavioral verifier (example/CI only)
+│       └── sandbox-run/     # bwrap reference runner for the disposability test
 ├── governance/              # (planned) source of truth: purpose, schema, tests
 ├── sdk/                     # (planned) generated FlatBuffers bindings
-├── actors/                  # (planned) one isolated sandbox per actor
+├── actors/                  # (planned) one service directory per actor (user-owned)
 ├── bin/                     # build output (gitignored)
 ├── cmd/
 │   ├── boundary-mcp/        # MCP server (stdio / loopback HTTP)
 │   ├── judge-eval/          # labeled proposal benchmark for JEV
-│   ├── sandbox-run/         # bwrap launcher + opencode.json template
 │   └── versionctl/          # content-addressed versions, aliases, adoption
 └── internal/
     ├── compiler/            # LLM semantic compiler, flatc gates, history
@@ -266,7 +270,7 @@ The target layout (see the architecture document for details):
 
 - **Go** 1.27 or newer
 - **FlatBuffers compiler** (`flatc`) — exercised in integration tests with 25.12.x
-- **Bubblewrap** (`bwrap`) on Linux, for sandboxed agent sessions
+- **Bubblewrap** (`bwrap`) on Linux, only for the litmus example runner
 - **opencode**, for the agent-facing workflow
 - An **OpenAI-compatible LLM endpoint** (optional), for the semantic compiler
 - An **OpenRouter API key** (required when the semantic compiler is enabled), for the semantic gate (JEV)
@@ -281,15 +285,37 @@ make litmus      # regenerate the example SDK and run the acceptance example
 
 Unit tests use an injected command runner and do not require `flatc`. The integration tests in `internal/fbs` exercise a real `flatc` and run automatically when it is on `PATH`; they are skipped otherwise.
 
-## Sandbox
+## Connecting a coder
 
-Once `actors/<name>/` and `governance/` exist, launch an isolated session with:
+Start the control plane and point your coder's MCP configuration at it. The coder owns the actor's service directory; boundary-mcp never receives its code.
 
 ```bash
-./cmd/sandbox-run/sandbox-run.sh actor_ingest
+make build
+export BOUNDARY_MCP_TOKEN=$(openssl rand -hex 24)
+./bin/boundary-mcp -transport http -addr 127.0.0.1:8765 \
+  -token "$BOUNDARY_MCP_TOKEN" -governance governance
 ```
 
-`sandbox-run` starts `boundary-mcp` outside the sandbox, waits for readiness, renders `opencode.json`, and launches `bwrap` with only the actor workspace and the read-only SDK mounted. Set `BOUNDARY_DRY_RUN=1` to inspect the plan without launching anything.
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "boundary": {
+        "type": "remote",
+        "url": "http://127.0.0.1:8765/mcp",
+        "oauth": false,
+        "headers": { "Authorization": "Bearer {env:BOUNDARY_MCP_TOKEN}" }
+      }
+    }
+  },
+  "permissions": [
+    { "action": "external_directory", "resource": "*", "effect": "deny" }
+  ]
+}
+```
+
+`external_directory: deny` keeps the coder inside the actor's directory. That rule is the isolation boundary, and it belongs to the coder's configuration, not to the server. For the reproducible sandboxed litmus run, use `examples/litmus/sandbox-run/sandbox-run.sh actor_ingest`; `BOUNDARY_DRY_RUN=1` prints the plan without launching anything.
 
 ## Semantic compiler
 

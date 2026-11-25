@@ -10,7 +10,7 @@
 4. [Verbal Source of Truth Format](#4-verbal-source-of-truth-format)
 5. [boundary-mcp Tool Specifications](#5-boundary-mcp-tool-specifications)
 6. [Deterministic Test Induction and Execution Engine](#6-deterministic-test-induction-and-execution-engine)
-7. [Physical Environment Isolation](#7-physical-environment-isolation)
+7. [Environment and Isolation](#7-environment-and-isolation)
 8. [Implementation Roadmap (Go MVP)](#8-implementation-roadmap-go-mvp)
 
 ---
@@ -29,7 +29,7 @@ The system solves three structural failure modes in current LLM-assisted softwar
 
 - **Semantic protocol management:** The contract is managed by a subjective engine that decides *what the protocol should mean* — intent fit, scope, invariants and drift. Deterministic gates decide whether that decision is expressible, wire-compatible and honored. The engine drives; the gates execute.
 - **Separation of Design Plane and Data Plane:** The semantic engine and its gates operate exclusively at design/governance time. At *runtime*, processes (black boxes) communicate strictly via **FlatBuffers** (*zero-copy* binary) over IPC, Unix Domain Sockets, or NATS.
-- **Capability-Based Physical Isolation:** Each actor is developed inside an isolated agent session (`opencode` running inside a `bwrap`/container sandbox) that **cannot see** the source code of other actors and lacks write permissions to contracts.
+- **Capability-Based Isolation:** The user's coder runs in the actor's own service directory and connects over MCP. The control plane never receives actor code and exposes only that actor's boundary view. A `bwrap` runner for the disposability experiment lives under `examples/litmus/`.
 - **Bidirectional Synchronization (`purpose.md` ↔ `protocol.fbs`):** The verbal purpose document and the binary schema co-evolve through a semantic compiler encapsulated behind deterministic gatekeepers (`flatc --conform`).
 - **Blind Behavioral Verification (Black-Box Testing):** The MCP server induces and executes deterministic state-machine and property-based tests against actor binaries (both as client and server), hiding fuzzing vectors from the implementing agent to prevent overfitting.
 
@@ -90,8 +90,7 @@ boundary-system/
 │   ├── actor_ingest/               # Sandbox 1 (e.g., Go)
 │   └── actor_enrich/               # Sandbox 2 (e.g., Rust or Go)
 ├── cmd/
-│   ├── boundary-mcp/               # Main MCP server in Go
-│   └── sandbox-run/                # bwrap/container wrapper to launch opencode
+│   └── boundary-mcp/               # Main MCP server in Go
 └── internal/
     ├── compiler/                   # Bidirectional bridge purpose.md <-> protocol.fbs
     ├── fbs/                        # Deterministic wrapper for `flatc` and `--conform`
@@ -255,34 +254,26 @@ The reference verifier (`examples/litmus/verify`) loads a trusted suite per acto
 - Frames are **built dynamically** from `.bfbs`: suites carry field values, not base64 payloads.
 - `mode: "server"` runs the Harness Client; `mode: "client"` runs the Reference Mock Peer with `scenarios` and declarative checks (`regex`, `min`, `max`, `equals`).
 - The actor receives `BOUNDARY_SOCKET`, and `{socket}` placeholders are substituted in `run`.
-- `build` and `run` are trusted governance values. `entrypoint_cmd` from the agent is only a fallback; pin `build` in the suite so the agent cannot execute arbitrary host commands.
+- `build` and `run` are trusted governance values. The verifier is no longer agent-facing; pin `build` in the suite so the reference runner never executes a command supplied at request time.
 
 ---
 
-## 7. Physical Environment Isolation
+## 7. Environment and Isolation
 
-To prevent LLMs from bypassing boundaries by reading neighboring files, each `opencode` session is launched via `cmd/sandbox-run/sandbox-run.sh`, which uses **Bubblewrap (`bwrap`)** on Linux:
+The control plane does not launch or sandbox the coder. The coder is user-owned and runs in the actor's service directory, as it does for any microservice.
 
-```bash
-make build
-./cmd/sandbox-run/sandbox-run.sh actor_enrich
-```
+Isolation is split by owner:
 
-The launcher:
+| Layer | Owner | Mechanism |
+| --- | --- | --- |
+| Actor source visibility | user's coder | one service directory per actor; `external_directory: deny` |
+| Boundary data exposure | boundary-mcp | filtered purpose, active protocol and protocol tests; never sibling data or hidden suites |
+| Interface access | boundary-mcp | bearer token; scope it to one actor when HTTP is exposed beyond loopback |
+| Code execution | user's CI | the control plane never builds or runs actor code |
 
-1. Starts `boundary-mcp` **outside** the sandbox (`-transport http -addr 127.0.0.1:0 -token ...`) with access to `governance/`.
-2. Waits for the server's `-ready-file`, then renders `opencode.json` pointing at the loopback Streamable HTTP endpoint.
-3. Runs `bwrap` with the actor workspace, the read-only SDK, the system runtime, and opencode's own state directories.
-4. Tears the server down when the session exits.
+The reference runner under `examples/litmus/sandbox-run/` reproduces the Phase 5 disposability experiment with **Bubblewrap (`bwrap`)**: it mounts only the actor workspace and the read-only SDK, keeps `governance/` outside the mount namespace, and connects over a bearer-protected loopback endpoint. It is example infrastructure, not the supported deployment model.
 
-**Sandbox Guarantees:**
-
-- `/workspace` mounts exclusively `actors/$ACTOR`.
-- `governance/`, the control-plane binary, and `actors/<others>` do not exist inside the process's mount namespace.
-- `sdk/` is mounted read-only (`--ro-bind`); any attempt by the agent to edit generated `.go` or `.rs` bindings fails at the kernel level (`EROFS`).
-- The only bridge to the control plane is a bearer-protected loopback endpoint; governance files never enter the sandbox.
-
-> **Note:** the sandbox shares the host network namespace so it can reach the loopback endpoint. The endpoint requires a per-session bearer token generated by `sandbox-run`.
+> The example runner shares the host network namespace to reach the loopback endpoint. Sandboxing it further is tracked in the plan.
 
 ---
 
@@ -298,10 +289,10 @@ The launcher:
   - [x] Schema evolution enforcement (`flatc --conform old.fbs new.fbs`).
 - [x] Implement standard binary framing (`[4-byte length][FlatBuffer payload]`) for transport-agnostic IPC (Unix Socket / stdio / NATS).
 
-### Phase 2: MCP Server & Sandbox (`internal/mcp` & `cmd/sandbox-run`)
+### Phase 2: MCP Server & Reference Runner (`internal/mcp` & `examples/litmus/sandbox-run`)
 
 - [x] Build Go MCP server (using `github.com/mark3labs/mcp-go`) exposing `get_boundary_context` and `propose_contract_evolution` over stdio and loopback Streamable HTTP (protocol resources and `get_protocol_tests` were added later).
-- [x] Create `sandbox-run` wrapper with `bwrap` and an `opencode.json` template wired to the `boundary-mcp` binary, keeping governance outside the sandbox mount namespace.
+- [x] Create the `sandbox-run` wrapper with `bwrap` and an `opencode.json` template wired to the `boundary-mcp` binary (later moved under `examples/litmus/` as the reference runner).
 
 ### Phase 3: Bidirectional Semantic Compiler (`internal/compiler`)
 

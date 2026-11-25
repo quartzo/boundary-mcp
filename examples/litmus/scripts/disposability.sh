@@ -67,7 +67,7 @@ AGENT_ARGS+=("Implement the task in /workspace/PROMPT.md. Use the boundary MCP t
 
 BOUNDARY_ROOT="$LITMUS_ROOT" \
 BOUNDARY_MCP_BIN="$MCP_BIN" \
-  "$REPO_ROOT/cmd/sandbox-run/sandbox-run.sh" "$ACTOR" "${AGENT_ARGS[@]}"
+  "$LITMUS_ROOT/sandbox-run/sandbox-run.sh" "$ACTOR" "${AGENT_ARGS[@]}"
 
 echo "Verifying the reconstructed actor..."
 if (cd "$REPO_ROOT" && go run ./examples/litmus/verify -root examples/litmus); then

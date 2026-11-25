@@ -1,6 +1,6 @@
 # Protocol Evolution Workflows
 
-> **Scope change in progress (2026-11-25).** §2–§3 describe actor verification and the sandboxed session that [ADR-0004](adr/0004-protocol-only-mcp.md) removes from the control plane. The target model separates contract management (this server), protocol tests (published as resources), and the merge gate (the user's CI). See [PLAN.md](PLAN.md).
+> **Scope change in progress (2026-11-25).** The control plane no longer launches the coder or executes actor code; §2 reflects the external-coder model. Contract management, protocol tests and the merge gate are now separate. See [PLAN.md](PLAN.md) and [ADR-0004](adr/0004-protocol-only-mcp.md).
 
 This document describes the workflows boundary-mcp is designed around. It separates what is implemented today from the target lifecycle, so the documentation does not imply that a designed step already runs.
 
@@ -20,24 +20,24 @@ Protocol management is a subjective decision: whether a change is the **right** 
 | `boundary-mcp` | The only agent-facing write path for the contract. Runs the compiler, gates, history, SDK regeneration and version metadata. |
 | `flatc` | Deterministic syntax/type gate and `--conform` wire-compatibility gate. |
 | Semantic engine (JEV) | The protocol-management core. Decides whether a change is the right protocol: intent fit, scope, invariants, drift and (designed) role-specific impact. It never decides wire compatibility. |
-| Harness | Black-box behavioral verification against hidden suites. |
+| Harness (CI) | Black-box behavioral verification against hidden suites. Not exposed over MCP. |
 
 Each layer is authoritative inside its own domain. The semantic engine decides legitimacy and can reject or escalate; `flatc` decides conformance and cannot be overruled by a semantic verdict; the harness decides behavior; versioning decides identity. None of them can overrule another's domain.
 
 ## 2. Actor development (Current)
 
 ```text
-sandbox-run actor_x
+coder in the actor's service directory (user-owned)
         |
         v
-boundary-mcp running outside the sandbox
+boundary-mcp (MCP over stdio or HTTP)
         |
         +--> get_boundary_context(actor_x)
         |       - purpose.md filtered to actor_x
         |       - active protocol.fbs
         |       - read-only SDK path
         |
-        +--> agent implements in /workspace
+        +--> agent implements in its service directory
         |
         +--> agent runs the protocol test spec locally
         |
@@ -45,13 +45,9 @@ boundary-mcp running outside the sandbox
                 PASS, or a minimal counterexample
 ```
 
-The actor sandbox contains only:
+The coder sees its own service directory; boundary-mcp exposes only that actor's boundary view and never receives the code. It does **not** expose `governance/`, other actors, or their tests. The agent cannot change the contract directly; it can only request a change through the evolution workflow.
 
-- its own read-write `/workspace`;
-- the generated SDK mounted read-only;
-- the bearer-protected MCP endpoint.
-
-It does **not** contain `governance/`, other actors, or their tests. The agent cannot change the contract from the sandbox; it can only request a change through the evolution workflow.
+The sandboxed variant is a fixture: `examples/litmus/sandbox-run/sandbox-run.sh` mounts only the actor workspace and the read-only SDK to reproduce the Phase 5 experiment.
 
 ## 3. Proposal and auto-commit (Current)
 
@@ -126,7 +122,7 @@ detect which artifact changed (latest history snapshot, then mtime)
 same flatc + SDK + semantic gate + commit pipeline
 ```
 
-If both artifacts changed since the last snapshot, `-sync` refuses to guess and returns an error. This path is for the architect; the sandbox still has no write access to governance.
+If both artifacts changed since the last snapshot, `-sync` refuses to guess and returns an error. This path is for the architect; the coder has no write access to governance.
 
 ## 5. Version identity and aliases (Current)
 
@@ -424,8 +420,12 @@ Rules:
 ### Current
 
 ```bash
-# Actor session
-./cmd/sandbox-run/sandbox-run.sh actor_ingest
+# Control plane
+./bin/boundary-mcp -governance governance
+./bin/boundary-mcp -transport http -addr 127.0.0.1:8765 -token "$BOUNDARY_MCP_TOKEN" -governance governance
+
+# Litmus example: sandboxed reference runner
+./examples/litmus/sandbox-run/sandbox-run.sh actor_ingest
 
 # Semantic compiler / semantic gate
 ./bin/boundary-mcp -llm-model ...

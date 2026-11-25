@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 #
-# Launch an isolated opencode session for a single actor.
+# Reference runner for the litmus example.
+#
+# It launches an isolated opencode session for a single actor so the Phase 5
+# disposability experiment stays reproducible. It is not the product path: a
+# real coder runs in its own service directory and connects to boundary-mcp
+# over MCP.
 #
 # Usage:
 #   sandbox-run <actor_name> [opencode arguments...]
@@ -10,8 +15,8 @@
 # mounted into the sandbox.
 #
 # Environment:
-#   BOUNDARY_ROOT       repository root (default: derived from this script)
-#   BOUNDARY_MCP_BIN    boundary-mcp binary (default: $BOUNDARY_ROOT/bin/boundary-mcp)
+#   BOUNDARY_ROOT       example root (default: examples/litmus)
+#   BOUNDARY_MCP_BIN    boundary-mcp binary (default: <repo>/bin/boundary-mcp)
 #   BOUNDARY_MCP_ADDR   HTTP listen address (default: 127.0.0.1:0 = ephemeral port)
 #   BOUNDARY_DRY_RUN    when non-empty, print the plan and exit
 set -euo pipefail
@@ -21,6 +26,7 @@ usage() {
 Usage: sandbox-run <actor_name> [opencode arguments...]
 
 Environment:
+  BOUNDARY_ROOT      example root (default: examples/litmus)
   BOUNDARY_MCP_BIN   override the boundary-mcp binary
   BOUNDARY_MCP_ADDR  override the HTTP listen address
   BOUNDARY_DRY_RUN   print the plan instead of launching the sandbox
@@ -41,7 +47,8 @@ if [[ -z "${HOME:-}" ]]; then
 fi
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=${BOUNDARY_ROOT:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}
+REPO_ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd)
+ROOT_DIR=${BOUNDARY_ROOT:-$(cd -- "$SCRIPT_DIR/.." && pwd)}
 ACTOR_DIR="$ROOT_DIR/actors/$ACTOR"
 
 if [[ ! -d "$ACTOR_DIR" ]]; then
@@ -54,7 +61,7 @@ if [[ ! -f "$ROOT_DIR/governance/purpose.md" || ! -f "$ROOT_DIR/governance/proto
   exit 1
 fi
 
-BOUNDARY_MCP_BIN=${BOUNDARY_MCP_BIN:-"$ROOT_DIR/bin/boundary-mcp"}
+BOUNDARY_MCP_BIN=${BOUNDARY_MCP_BIN:-"$REPO_ROOT/bin/boundary-mcp"}
 if [[ ! -x "$BOUNDARY_MCP_BIN" ]]; then
   echo "sandbox-run: boundary-mcp binary not found: $BOUNDARY_MCP_BIN" >&2
   echo "             build it with: make build" >&2

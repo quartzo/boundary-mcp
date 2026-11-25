@@ -1,6 +1,6 @@
 # Plan: Protocol-Only boundary-mcp
 
-- **Status:** Stages 1–3 implemented; Stages 4–7 pending
+- **Status:** Stages 1–4 implemented; Stages 5–7 pending
 - **Date:** 2026-11-25
 - **Decision record:** [ADR-0004](adr/0004-protocol-only-mcp.md)
 - **Supersedes in scope:** the actor-runtime and actor-verification parts of [ARCHITECTURE.md](ARCHITECTURE.md) §6–§7 and [WORKFLOWS.md](WORKFLOWS.md) §2–§3
@@ -10,7 +10,7 @@
 The repository currently carries three responsibilities:
 
 1. **Contract management** — `purpose.md` ↔ `protocol.fbs` ↔ `state_machine.json`, `flatc` gates, the semantic engine, versions and compatibility.
-2. **Agent runtime** — `cmd/sandbox-run` launches a pinned `opencode` inside `bwrap`.
+2. **Agent runtime** — `cmd/sandbox-run` launched a pinned `opencode` inside `bwrap`.
 3. **Actor behavior verification** — `verify_actor_behavior` builds and runs the actor binary against hidden suites.
 
 Only (1) is the product. (2) and (3) were introduced to make the Phase 5 disposability experiment reproducible, and were then documented as the product's isolation and verification models. That inversion has concrete costs:
@@ -164,13 +164,13 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 
 **Acceptance:** `go build ./...` and `go test ./...` pass; the litmus example still runs end to end.
 
-### Stage 4 — Move the agent runtime out
+### Stage 4 — Move the agent runtime out (implemented)
 
-- `git mv cmd/sandbox-run examples/litmus/sandbox-run`.
-- Remove it from the README quick start and the Makefile product targets.
-- Document connecting an existing coder: `opencode.json` → `mcp.servers`, bearer token or OAuth, and the recommended `external_directory: deny` rule.
+- `cmd/sandbox-run` moved to `examples/litmus/sandbox-run/`; its default root is now the example and its binary default is `<repo>/bin/boundary-mcp`.
+- The README quick start and the Sandbox section were replaced by "Connecting a coder" (MCP endpoint, `{env:...}` token, `external_directory: deny`).
+- `examples/litmus/scripts/disposability.sh` invokes the moved runner.
 
-**Acceptance:** no product path mentions `bwrap`; the only reference is the example and this plan.
+**Acceptance:** no product path mentions `bwrap`; the only references are the example and this plan.
 
 ### Stage 5 — Rewrite the docs
 
