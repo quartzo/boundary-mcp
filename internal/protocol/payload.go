@@ -364,7 +364,7 @@ func (s *Schema) BoundaryMutations(payload []byte) (mutations []Mutation, err er
 	if len(payload) > 2 {
 		mutations = append(mutations,
 			Mutation{Name: "truncate-half", Payload: append([]byte(nil), payload[:len(payload)/2]...)},
-			Mutation{Name: "truncate-last", Payload: append([]byte(nil), payload[:len(payload)-1]...)},
+			Mutation{Name: "truncate-root", Payload: append([]byte(nil), payload[:root]...)},
 		)
 	}
 	if len(payload) >= 4 {
@@ -376,10 +376,12 @@ func (s *Schema) BoundaryMutations(payload []byte) (mutations []Mutation, err er
 		binary.LittleEndian.PutUint32(badVTable[root:], uint32(root+4))
 		mutations = append(mutations, Mutation{Name: "bad-vtable", Payload: badVTable})
 	}
-	if len(payload) > 0 {
+	if len(payload) > 3 {
 		flipped := append([]byte(nil), payload...)
-		flipped[len(flipped)-1] ^= 0xFF
-		mutations = append(mutations, Mutation{Name: "flip-last-byte", Payload: flipped})
+		// Corrupt the most significant byte of the little-endian root offset
+		// so the root lands far outside the buffer.
+		flipped[3] ^= 0xFF
+		mutations = append(mutations, Mutation{Name: "flip-root-offset", Payload: flipped})
 	}
 
 	return mutations, nil

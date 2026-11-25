@@ -47,6 +47,8 @@ The coder sees its own service directory; boundary-mcp exposes only that actor's
 
 The litmus example keeps a sandboxed reference runner for the Phase 5 disposability experiment; see [examples/litmus/README.md](../examples/litmus/README.md).
 
+Merge authority is the user's CI: it runs the protocol tests and the behavioral suite. The MCP server publishes the spec and records contract changes; it never approves a merge.
+
 ## 3. Proposal and auto-commit (Current)
 
 ```text
@@ -439,7 +441,8 @@ go run ./cmd/versionctl alias -governance examples/litmus/governance stable v0
 ### Make targets
 
 ```bash
-make litmus
+make litmus           # protocol tests + behavioral acceptance example
+make protocol-test    # reference protocol-test runner only
 make judge-e2e
 make version-snapshot
 make version-compat
@@ -465,6 +468,7 @@ These commands are intentionally not exposed until the compiler supports draft-f
 | Actor context and read-only SDK | Current |
 | Protocol test specs published as MCP resources | Current |
 | Reference behavioral verification (example/CI) | Current |
+| Reference protocol-test runner (`make protocol-test`) | Current |
 | `propose_contract_evolution` auto-commit | Current |
 | Manual `-sync` reconciliation | Current |
 | Semantic gate (JEV) enforced when the compiler is enabled | Current |

@@ -6,7 +6,7 @@
 
 ## Status
 
-**Semantic engine enforced; litmus and versioning green.** The semantic engine (`internal/judge`) is the protocol-management core: it calls JEV through OpenRouter's typed System One API to decide whether a proposal is the right protocol, while `flatc` decides whether that decision is expressible and wire-compatible. The gate is mandatory whenever the semantic compiler is enabled and fails closed. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-gate path. The Phase 5 litmus remains green. The control plane manages contracts and publishes protocol tests; the coder and CI are external ([ADR-0004](docs/adr/0004-protocol-only-mcp.md)). The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model, plus [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Semantic engine enforced; litmus and versioning green.** The semantic engine (`internal/judge`) is the protocol-management core: it calls JEV through OpenRouter's typed System One API to decide whether a proposal is the right protocol, while `flatc` decides whether that decision is expressible and wire-compatible. The gate is mandatory whenever the semantic compiler is enabled and fails closed. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-gate path. The Phase 5 litmus remains green. The control plane manages contracts and publishes protocol tests; the coder and CI are external ([ADR-0004](docs/adr/0004-protocol-only-mcp.md)). The re-scoping plan in [docs/PLAN.md](docs/PLAN.md) is implemented through Stage 7. The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model, plus [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -272,9 +272,10 @@ The target layout (see the architecture document for details):
 ## Development
 
 ```bash
-make build       # build bin/boundary-mcp
-make test        # run the test suite
-make litmus      # regenerate the example SDK and run the acceptance example
+make build          # build bin/boundary-mcp
+make test           # run the test suite
+make protocol-test  # run the reference protocol-test runner
+make litmus         # SDK + protocol tests + the behavioral acceptance example
 ```
 
 Unit tests use an injected command runner and do not require `flatc`. The integration tests in `internal/fbs` exercise a real `flatc` and run automatically when it is on `PATH`; they are skipped otherwise.
@@ -358,7 +359,7 @@ Protocol tests are published, not executed. The server validates every spec unde
 - `boundary://protocol/{hash}/purpose` — the full `purpose.md`
 - `boundary://actor/{name}/context` — the filtered boundary view for one actor
 
-`get_protocol_tests` is the tool fallback for clients that do not read resources. A spec is declarative: `seeds` provide valid frames, `rules` carry explicit valid/invalid examples for semantic assertions, and `mutations` select structural cases. `internal/protocoltest` expands a spec deterministically (sorted cases, base64 frames) for the coder or CI to run. The protocol-test path never builds or runs actor code.
+`get_protocol_tests` is the tool fallback for clients that do not read resources. `examples/litmus/protocoltest` is the reference runner: it expands each spec twice to prove determinism, validates every structural case against the schema and reports the semantic assertions. `make protocol-test` runs it. The server publishes the spec and never decides a merge. A spec is declarative: `seeds` provide valid frames, `rules` carry explicit valid/invalid examples for semantic assertions, and `mutations` select structural cases. `internal/protocoltest` expands a spec deterministically (sorted cases, base64 frames) for the coder or CI to run. The protocol-test path never builds or runs actor code. **Merge authority is CI**: it runs the protocol tests and the behavioral suite. The server is not a gate.
 
 ## Protocol versions and compatibility
 

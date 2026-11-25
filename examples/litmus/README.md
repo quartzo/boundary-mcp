@@ -31,6 +31,7 @@ examples/litmus/
 │   └── actor_enrich/       # nested Go module
 ├── sdk/go/litmus/          # generated module, committed for reproducibility
 ├── harness/                # reference behavioral verifier (imports internal/protocol)
+├── protocoltest/           # reference protocol-test runner (structure + determinism)
 ├── verify/                 # runs the behavioral suites with examples/litmus/harness
 ├── prompts/
 │   └── reconstruct_actor_enrich.md
@@ -50,11 +51,12 @@ make litmus
 Or from this directory:
 
 ```bash
-make verify
-make sdk      # regenerate sdk/go from governance/protocol.fbs
+make protocol-test   # reference protocol-test runner
+make verify          # behavioral acceptance example
+make sdk             # regenerate sdk/go from governance/protocol.fbs
 ```
 
-`make verify` builds each actor inside its workspace and runs the hidden suite:
+`make protocol-test` expands the normative spec twice, checks determinism and validates every structural case against the schema. `make verify` builds each actor inside its workspace and runs its behavioral suite:
 
 - `actor_enrich` in **server** mode: valid seeds must produce a valid
   `Envelope`, and structural mutations must be dropped or answered without

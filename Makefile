@@ -1,4 +1,4 @@
-.PHONY: build test fmt vet clean litmus litmus-sdk judge-eval judge-calibrate judge-e2e version-snapshot version-compat version-list
+.PHONY: build test fmt vet clean litmus litmus-sdk protocol-test judge-eval judge-calibrate judge-e2e version-snapshot version-compat version-list
 
 VERSION_GOVERNANCE ?= examples/litmus/governance
 VERSION_ALIAS ?= v0
@@ -20,8 +20,11 @@ vet:
 clean:
 	rm -rf bin
 
-litmus: litmus-sdk
+litmus: litmus-sdk protocol-test
 	go run ./examples/litmus/verify -root examples/litmus
+
+protocol-test:
+	go run ./examples/litmus/protocoltest -governance examples/litmus/governance
 
 litmus-sdk:
 	flatc --go -o examples/litmus/sdk/go examples/litmus/governance/protocol.fbs

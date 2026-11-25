@@ -78,6 +78,10 @@ func Expand(ctx context.Context, opts ExpandOptions, spec *Spec) (*Artifact, err
 	}
 	defer cleanup()
 
+	return expandWithSchema(opts, spec, schema)
+}
+
+func expandWithSchema(opts ExpandOptions, spec *Spec, schema *protocol.Schema) (*Artifact, error) {
 	requested := requestedMutations(spec.Mutations)
 
 	var cases []Case
@@ -180,7 +184,7 @@ func mutationCategory(name string) string {
 		return MutationTruncate
 	case name == "bad-root-offset" || name == "bad-vtable":
 		return MutationBadOffset
-	case name == "flip-last-byte":
+	case name == "flip-root-offset":
 		return MutationFlip
 	case strings.HasSuffix(name, "=invalid-utf8"):
 		return MutationInvalidUTF8

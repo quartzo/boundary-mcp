@@ -281,6 +281,8 @@ When a node is an external service, its actor is a thin boundary adapter. The be
 - The coder runs the spec during development.
 - CI runs the behavioral suite and decides whether a merge proceeds.
 
+The reference protocol-test runner is `examples/litmus/protocoltest` (`make protocol-test`). It expands each spec twice to prove determinism, validates every structural case against the schema and reports the semantic assertions. Merge authority is CI; the server is not a gate.
+
 ---
 
 ## 7. Environment and Isolation

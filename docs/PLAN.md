@@ -1,6 +1,6 @@
 # Plan: Protocol-Only boundary-mcp
 
-- **Status:** Stages 1–6 implemented; Stage 7 pending
+- **Status:** Stages 1–7 implemented
 - **Date:** 2026-11-25
 - **Decision record:** [ADR-0004](adr/0004-protocol-only-mcp.md)
 - **Supersedes in scope:** the actor-runtime and actor-verification parts of [ARCHITECTURE.md](ARCHITECTURE.md) §6–§7 and [WORKFLOWS.md](WORKFLOWS.md) §2–§3
@@ -190,12 +190,14 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 
 **Acceptance:** a token for `actor_ingest` cannot read, propose or read the context resource for `actor_enrich`; covered by `TestScopedTokenOverHTTP`.
 
-### Stage 7 — Make the gate explicit
+### Stage 7 — Make the gate explicit (implemented)
 
-- Document that merge authority lives in the user's CI, not in the server.
-- Provide a reference runner target (`make protocol-test`) in the example that consumes the spec and exits non-zero on drift.
+- `examples/litmus/protocoltest` is the reference runner: it expands each spec twice, fails on non-determinism, validates every structural case against the schema and reports the semantic assertions.
+- `make protocol-test` runs it; `make litmus` now runs it before the behavioral acceptance example.
+- Merge authority is documented as the user's CI in README, ARCHITECTURE §6.4 and WORKFLOWS; the server is not described as a gate.
+- The runner exposed two unreliable mutations, which were fixed in `internal/protocol`: `truncate-root` replaces `truncate-last`, and `flip-root-offset` replaces the padding-sensitive `flip-last-byte`.
 
-**Acceptance:** the reference runner reproduces the spec's cases byte-for-byte and is the only thing described as a gate.
+**Acceptance:** the reference runner reproduces the spec's cases byte-for-byte and fails on structural drift; it is the only component described as a gate besides CI. Met.
 
 ## 7. Non-goals
 
