@@ -136,7 +136,7 @@ Example:
 
 ## 5. boundary-mcp Tool Specifications
 
-The `boundary-mcp` server exposes two actor-facing MCP tools (`get_boundary_context`, `propose_contract_evolution`) and one protocol-testing tool (`get_protocol_tests`), plus protocol resources addressed by content hash. It runs over stdio for direct sessions; remote sessions connect to a control-plane instance over Streamable HTTP with a bearer token. `sync_from_manual_edit` (§5.4) is an administrative CLI trigger rather than an MCP tool.
+The `boundary-mcp` server exposes two actor-facing MCP tools (`get_boundary_context`, `propose_contract_evolution`) and one protocol-testing tool (`get_protocol_tests`), plus protocol resources addressed by content hash. It runs over stdio for direct sessions; remote sessions connect to a control-plane instance over Streamable HTTP with a bearer token. `-actor-token actor=token` scopes a token to one actor. `sync_from_manual_edit` (§5.4) is an administrative CLI trigger rather than an MCP tool.
 
 ### 5.1 `get_boundary_context`
 
@@ -293,12 +293,14 @@ Isolation is split by owner:
 | --- | --- | --- |
 | Actor source visibility | user's coder | one service directory per actor; `external_directory: deny` |
 | Boundary data exposure | boundary-mcp | filtered purpose, active protocol and protocol tests; never sibling data or hidden suites |
-| Interface access | boundary-mcp | bearer token; scope it to one actor when HTTP is exposed beyond loopback |
+| Interface access | boundary-mcp | `-actor-token actor=token` scopes a bearer to one actor; `-token` is unscoped |
 | Code execution | user's CI | the control plane never builds or runs actor code |
 
 The litmus example keeps a reference runner under `examples/litmus/` that reproduces the Phase 5 disposability experiment with **Bubblewrap (`bwrap`)**: it mounts only the actor workspace and the read-only SDK, keeps `governance/` outside the mount namespace, and connects over a bearer-protected loopback endpoint. It is example infrastructure, not the supported deployment model.
 
 > The example runner shares the host network namespace to reach the loopback endpoint. Sandboxing it further is tracked in the plan.
+
+`flatc` runs with a 30-second default timeout and rejects schemas above 1 MiB; `.fbs` content is untrusted input to a C++ parser. A tool response never includes an absolute governance path: the proposal result reports `diff.patch` relative to the governance directory.
 
 ---
 

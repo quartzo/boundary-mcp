@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -43,7 +44,7 @@ func main() {
 		protocolTests = flag.String("protocol-tests", "", "protocol test spec directory (default: <governance>/protocol_tests)")
 		transport     = flag.String("transport", "stdio", "transport: stdio or http")
 		addr          = flag.String("addr", "127.0.0.1:8765", "HTTP listen address (transport=http)")
-		token         = flag.String("token", "", "bearer token for HTTP transport; empty disables auth")
+		token         = flag.String("token", "", "unscoped bearer token for HTTP transport; empty disables auth")
 		readyFile     = flag.String("ready-file", "", "write the effective MCP URL to this file once listening")
 		llmBaseURL    = flag.String("llm-base-url", envOr("BOUNDARY_LLM_BASE_URL", ""), "OpenAI-compatible API base URL")
 		llmAPIKey     = flag.String("llm-api-key", envOr("BOUNDARY_LLM_API_KEY", ""), "API key for the LLM provider")
@@ -56,6 +57,8 @@ func main() {
 		syncFlag      = flag.Bool("sync", false, "sync purpose.md and protocol.fbs once, print the result and exit")
 		showVersion   = flag.Bool("version", false, "print version and exit")
 	)
+	actorTokens := actorTokenFlags{}
+	flag.Var(actorTokens, "actor-token", "actor=token; scope a bearer token to one actor (repeatable)")
 	flag.Parse()
 
 	if *showVersion {
@@ -103,7 +106,8 @@ func main() {
 			log.Fatalf("boundary-mcp: stdio: %v", err)
 		}
 	case "http":
-		if err := serveHTTP(srv, *addr, *token, *readyFile); err != nil {
+		auth := mcp.Auth{Token: *token, ActorTokens: actorTokens}
+		if err := serveHTTP(srv, *addr, auth, *readyFile); err != nil {
 			log.Fatalf("boundary-mcp: http: %v", err)
 		}
 	default:
@@ -176,7 +180,7 @@ func runSync(comp *compiler.Compiler) {
 	}
 }
 
-func serveHTTP(srv *mcp.Server, addr, token, readyFile string) error {
+func serveHTTP(srv *mcp.Server, addr string, auth mcp.Auth, readyFile string) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -193,7 +197,7 @@ func serveHTTP(srv *mcp.Server, addr, token, readyFile string) error {
 	log.Printf("boundary-mcp %s listening on %s (health %s)", version, mcpURL, mcp.HealthPath)
 
 	httpSrv := &http.Server{
-		Handler:           srv.HTTPHandler(token),
+		Handler:           srv.HTTPHandler(auth),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -235,4 +239,29 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// actorTokenFlags collects repeated -actor-token actor=token values.
+type actorTokenFlags map[string]string
+
+func (t actorTokenFlags) String() string {
+	parts := make([]string, 0, len(t))
+	for actor := range t {
+		parts = append(parts, actor+"=***")
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func (t actorTokenFlags) Set(value string) error {
+	actor, token, ok := strings.Cut(value, "=")
+	actor, token = strings.TrimSpace(actor), strings.TrimSpace(token)
+	if !ok || actor == "" || token == "" {
+		return errors.New("want actor=token")
+	}
+	if _, exists := t[actor]; exists {
+		return fmt.Errorf("duplicate actor-token for %q", actor)
+	}
+	t[actor] = token
+	return nil
 }

@@ -11,7 +11,7 @@ func TestHTTPHealth(t *testing.T) {
 	t.Parallel()
 
 	s := newTestServer(t, Options{})
-	handler := s.HTTPHandler("secret")
+	handler := s.HTTPHandler(Auth{Token: "secret"})
 
 	rec := doRequest(handler, http.MethodGet, HealthPath, "")
 	if rec.Code != http.StatusOK {
@@ -26,7 +26,7 @@ func TestHTTPRequiresBearer(t *testing.T) {
 	t.Parallel()
 
 	s := newTestServer(t, Options{})
-	handler := s.HTTPHandler("secret")
+	handler := s.HTTPHandler(Auth{Token: "secret"})
 
 	for _, tc := range []struct {
 		name   string
@@ -51,7 +51,7 @@ func TestHTTPWithoutTokenSkipsAuth(t *testing.T) {
 	t.Parallel()
 
 	s := newTestServer(t, Options{})
-	handler := s.HTTPHandler("")
+	handler := s.HTTPHandler(Auth{})
 
 	rec := doRequest(handler, http.MethodPost, MCPPath, "")
 	if rec.Code == http.StatusUnauthorized {

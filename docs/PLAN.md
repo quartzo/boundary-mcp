@@ -1,6 +1,6 @@
 # Plan: Protocol-Only boundary-mcp
 
-- **Status:** Stages 1–5 implemented; Stages 6–7 pending
+- **Status:** Stages 1–6 implemented; Stage 7 pending
 - **Date:** 2026-11-25
 - **Decision record:** [ADR-0004](adr/0004-protocol-only-mcp.md)
 - **Supersedes in scope:** the actor-runtime and actor-verification parts of [ARCHITECTURE.md](ARCHITECTURE.md) §6–§7 and [WORKFLOWS.md](WORKFLOWS.md) §2–§3
@@ -181,14 +181,14 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 
 **Acceptance:** `rg 'verify_actor_behavior|sandbox-run|physical isolation'` matches only historical ADRs, this plan, and `examples/`. Met.
 
-### Stage 6 — Hardening that remains
+### Stage 6 — Hardening that remains (implemented)
 
-- Scope the bearer token to one actor when HTTP is exposed beyond loopback.
-- Validate `actor_name` against the actors declared in `purpose.md`.
-- Run `flatc` with a timeout and resource limits (`.fbs` is untrusted input to a C++ parser).
-- Never return another actor's context or `governance/` paths in a tool response.
+- `-actor-token actor=token` binds the HTTP bearer to one actor; the middleware puts the actor in the request context and `authorizeActor` rejects tools and resources for a different one. `-token` remains an unscoped option.
+- `actor_name` is validated against the Actors section of `purpose.md` before the compiler runs.
+- `flatc` gets a 30-second default timeout when the caller has no deadline, and schemas above 1 MiB are rejected.
+- The proposal result reports `diff.patch` relative to the governance directory instead of an absolute host path.
 
-**Acceptance:** a token for `actor_ingest` cannot read or propose for `actor_enrich`.
+**Acceptance:** a token for `actor_ingest` cannot read, propose or read the context resource for `actor_enrich`; covered by `TestScopedTokenOverHTTP`.
 
 ### Stage 7 — Make the gate explicit
 

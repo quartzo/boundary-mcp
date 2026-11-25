@@ -122,7 +122,7 @@ func (s *Server) handleProtocolTests(_ context.Context, req mcpsdk.ReadResourceR
 	}, nil
 }
 
-func (s *Server) handleActorContext(_ context.Context, req mcpsdk.ReadResourceRequest) ([]mcpsdk.ResourceContents, error) {
+func (s *Server) handleActorContext(ctx context.Context, req mcpsdk.ReadResourceRequest) ([]mcpsdk.ResourceContents, error) {
 	actor, ok := strings.CutPrefix(req.Params.URI, actorURIPrefix)
 	if !ok {
 		return nil, fmt.Errorf("mcp: unsupported resource %s", req.Params.URI)
@@ -130,6 +130,9 @@ func (s *Server) handleActorContext(_ context.Context, req mcpsdk.ReadResourceRe
 	actor, _, _ = strings.Cut(actor, "/")
 	if strings.TrimSpace(actor) == "" {
 		return nil, errors.New("mcp: actor resource requires an actor name")
+	}
+	if err := s.authorizeActor(ctx, actor); err != nil {
+		return nil, err
 	}
 
 	out, err := s.boundaryContext(actor)

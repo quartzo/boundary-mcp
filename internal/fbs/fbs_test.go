@@ -1,8 +1,10 @@
 package fbs
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -331,5 +333,67 @@ func assertCall(t *testing.T, runner *fakeRunner, wantPath string, wantArgs []st
 	}
 	if !slices.Equal(call.args, wantArgs) {
 		t.Fatalf("flatc args = %q, want %q", call.args, wantArgs)
+	}
+}
+
+func TestConformRejectsOversizedSchema(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	big := filepath.Join(dir, "big.fbs")
+	if err := os.WriteFile(big, bytes.Repeat([]byte("a"), MaxSchemaBytes+1), 0o644); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	compiler := NewCompiler("/opt/flatc")
+	err := compiler.Conform(context.Background(), big, big)
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("err = %v, want size error", err)
+	}
+}
+
+func TestExecAppliesDefaultTimeout(t *testing.T) {
+	t.Parallel()
+
+	compiler := NewCompiler("/opt/flatc")
+	var remaining time.Duration
+	compiler.run = func(ctx context.Context, _ string, _ []string) (string, string, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return "", "", errors.New("no deadline")
+		}
+		remaining = time.Until(deadline)
+		return "", "", nil
+	}
+
+	if _, err := compiler.Version(context.Background()); err != nil {
+		t.Fatalf("Version: %v", err)
+	}
+	if remaining <= 0 || remaining > DefaultTimeout {
+		t.Fatalf("remaining = %v, want (0, %v]", remaining, DefaultTimeout)
+	}
+}
+
+func TestExecKeepsCallerDeadline(t *testing.T) {
+	t.Parallel()
+
+	compiler := NewCompiler("/opt/flatc")
+	var remaining time.Duration
+	compiler.run = func(ctx context.Context, _ string, _ []string) (string, string, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return "", "", errors.New("no deadline")
+		}
+		remaining = time.Until(deadline)
+		return "", "", nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := compiler.Version(ctx); err != nil {
+		t.Fatalf("Version: %v", err)
+	}
+	if remaining <= 0 || remaining > time.Second {
+		t.Fatalf("remaining = %v, want (0, 1s]", remaining)
 	}
 }

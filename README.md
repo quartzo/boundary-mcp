@@ -287,7 +287,7 @@ Start the control plane and point your coder's MCP configuration at it. The code
 make build
 export BOUNDARY_MCP_TOKEN=$(openssl rand -hex 24)
 ./bin/boundary-mcp -transport http -addr 127.0.0.1:8765 \
-  -token "$BOUNDARY_MCP_TOKEN" -governance governance
+  -actor-token "actor_ingest=$BOUNDARY_MCP_TOKEN" -governance governance
 ```
 
 ```jsonc
@@ -309,7 +309,7 @@ export BOUNDARY_MCP_TOKEN=$(openssl rand -hex 24)
 }
 ```
 
-`external_directory: deny` keeps the coder inside the actor's directory. That rule is the isolation boundary, and it belongs to the coder's configuration, not to the server. The litmus example ships a reproducible sandboxed runner for the disposability experiment; see [examples/litmus/README.md](examples/litmus/README.md).
+`-actor-token actor=token` binds the bearer to one actor; requests for another actor are rejected. `-token` is an unscoped token for local or administrative use. `external_directory: deny` keeps the coder inside the actor's directory. That rule is the isolation boundary, and it belongs to the coder's configuration, not to the server. The litmus example ships a reproducible sandboxed runner for the disposability experiment; see [examples/litmus/README.md](examples/litmus/README.md).
 
 ## Semantic compiler
 

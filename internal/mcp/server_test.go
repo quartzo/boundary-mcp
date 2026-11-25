@@ -90,7 +90,7 @@ func TestGetBoundaryContextUnknownActor(t *testing.T) {
 	if !res.IsError {
 		t.Fatal("expected a tool error for an unknown actor")
 	}
-	if !strings.Contains(toolText(res), "not found") {
+	if !strings.Contains(toolText(res), "not listed") {
 		t.Fatalf("error text = %q", toolText(res))
 	}
 }
@@ -156,6 +156,24 @@ func TestProposeRequiresIntent(t *testing.T) {
 	res := callTool(t, c, "propose_contract_evolution", map[string]any{"actor_name": "actor_ingest"})
 	if !res.IsError {
 		t.Fatal("expected a tool error for a missing intent_description")
+	}
+}
+
+func TestProposeRejectsUnlistedActor(t *testing.T) {
+	t.Parallel()
+
+	evolver := &fakeEvolver{result: &ProposalResult{Status: "committed"}}
+	c := startClient(t, newTestServer(t, Options{Evolver: evolver}))
+
+	res := callTool(t, c, "propose_contract_evolution", map[string]any{
+		"actor_name":         "actor_ghost",
+		"intent_description": "add a field",
+	})
+	if !res.IsError || !strings.Contains(toolText(res), "not listed") {
+		t.Fatalf("result = %q (isError=%v), want a not-listed error", toolText(res), res.IsError)
+	}
+	if evolver.got.ActorName != "" {
+		t.Fatalf("evolver was called for %q", evolver.got.ActorName)
 	}
 }
 

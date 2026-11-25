@@ -410,6 +410,7 @@ Rules:
 | Semantic gate reject | Rejected; diagnostics returned; no commit. |
 | Semantic gate review | Escalated; no commit; human review required. |
 | Semantic gate/provider outage | Proposals fail closed. The gate is mandatory whenever the semantic compiler is enabled; there is no product off switch. |
+| Token scoped to another actor | Rejected; no context, proposal or resource is returned. |
 | Behavioral suite failure (CI) | Minimal counterexample returned; the actor must change, not the contract. |
 | Both artifacts edited before `-sync` | Error; the architect must choose one source of truth. |
 

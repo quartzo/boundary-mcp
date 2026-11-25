@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -397,6 +398,9 @@ func (c *Compiler) apply(ctx context.Context, in applyInput) (*mcp.ProposalResul
 	historyDir, patchPath, err := c.writeHistory(in, changed, diff, now, judgeRecord)
 	if err != nil {
 		return nil, err
+	}
+	if rel, err := filepath.Rel(c.opts.GovernanceDir, patchPath); err == nil {
+		patchPath = filepath.ToSlash(rel)
 	}
 
 	if err := c.commitArtifacts(in.before, in.after); err != nil {

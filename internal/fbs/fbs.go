@@ -12,13 +12,23 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ErrNotInstalled is returned when the flatc binary cannot be located.
 var ErrNotInstalled = errors.New("fbs: flatc binary not found")
+
+const (
+	// DefaultTimeout bounds a single flatc invocation when the caller's
+	// context has no deadline. Schemas are untrusted input to a C++ parser.
+	DefaultTimeout = 30 * time.Second
+	// MaxSchemaBytes bounds a .fbs file that flatc may read.
+	MaxSchemaBytes = 1 << 20
+)
 
 // Language identifies a code generation target supported by flatc.
 type Language string
@@ -89,6 +99,9 @@ func (c *Compiler) Generate(ctx context.Context, opt GenerateOptions) error {
 	if opt.OutDir == "" {
 		return errors.New("fbs: output directory is required")
 	}
+	if err := checkSchemaSize(opt.Schema); err != nil {
+		return err
+	}
 
 	args := []string{flag, "-o", opt.OutDir}
 	args = appendIncludes(args, opt.IncludeDirs)
@@ -109,6 +122,9 @@ func (c *Compiler) CompileBinarySchema(ctx context.Context, schema, outDir strin
 	}
 	if outDir == "" {
 		return "", errors.New("fbs: output directory is required")
+	}
+	if err := checkSchemaSize(schema); err != nil {
+		return "", err
 	}
 
 	args := []string{"--binary", "--schema", "-o", outDir}
@@ -131,6 +147,12 @@ func (c *Compiler) CompileBinarySchema(ctx context.Context, schema, outDir strin
 func (c *Compiler) Conform(ctx context.Context, oldSchema, newSchema string) error {
 	if oldSchema == "" || newSchema == "" {
 		return errors.New("fbs: both old and new schema paths are required")
+	}
+	if err := checkSchemaSize(oldSchema); err != nil {
+		return err
+	}
+	if err := checkSchemaSize(newSchema); err != nil {
+		return err
 	}
 
 	_, _, err := c.exec(ctx, "--conform", oldSchema, newSchema)
@@ -202,11 +224,29 @@ func (e *ConformError) Error() string {
 func (e *ConformError) Unwrap() error { return e.Err }
 
 func (c *Compiler) exec(ctx context.Context, args ...string) (string, string, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultTimeout)
+		defer cancel()
+	}
 	run := c.run
 	if run == nil {
 		run = runCommand
 	}
 	return run(ctx, c.Path(), args)
+}
+
+// checkSchemaSize rejects schemas that exceed the parser input bound. Stat
+// errors are left to flatc so missing paths keep their usual diagnostics.
+func checkSchemaSize(path string) error {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return nil
+	}
+	if info.Size() > MaxSchemaBytes {
+		return fmt.Errorf("fbs: schema %s exceeds %d bytes", path, MaxSchemaBytes)
+	}
+	return nil
 }
 
 func runCommand(ctx context.Context, path string, args []string) (string, string, error) {

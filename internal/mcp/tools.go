@@ -77,7 +77,7 @@ func (s *Server) registerTools() {
 	)
 }
 
-func (s *Server) handleGetBoundaryContext(_ context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+func (s *Server) handleGetBoundaryContext(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 	var in getBoundaryContextInput
 	if err := req.BindArguments(&in); err != nil {
 		return mcpsdk.NewToolResultErrorf("invalid arguments: %v", err), nil
@@ -86,12 +86,32 @@ func (s *Server) handleGetBoundaryContext(_ context.Context, req mcpsdk.CallTool
 	if actor == "" {
 		return mcpsdk.NewToolResultError("actor_name is required"), nil
 	}
+	if err := s.authorizeActor(ctx, actor); err != nil {
+		return mcpsdk.NewToolResultError(err.Error()), nil
+	}
 
 	out, err := s.boundaryContext(actor)
 	if err != nil {
 		return mcpsdk.NewToolResultError(err.Error()), nil
 	}
 	return mcpsdk.NewToolResultStructured(out, formatBoundaryContext(out)), nil
+}
+
+// authorizeActor rejects a request when the bearer token is scoped to a
+// different actor, or when the actor is not listed in the Actors section of
+// purpose.md.
+func (s *Server) authorizeActor(ctx context.Context, actor string) error {
+	if scoped, ok := ActorFromContext(ctx); ok && scoped != actor {
+		return fmt.Errorf("mcp: token is scoped to actor %q", scoped)
+	}
+	purpose, err := governance.LoadPurpose(filepath.Join(s.opts.GovernanceDir, "purpose.md"))
+	if err != nil {
+		return err
+	}
+	if !purpose.HasActor(actor) {
+		return fmt.Errorf("mcp: actor %q is not listed in the Actors section", actor)
+	}
+	return nil
 }
 
 func (s *Server) boundaryContext(actor string) (boundaryContextOutput, error) {
@@ -128,6 +148,9 @@ func (s *Server) handleProposeContractEvolution(ctx context.Context, req mcpsdk.
 	}
 	if strings.TrimSpace(in.IntentDescription) == "" {
 		return mcpsdk.NewToolResultError("intent_description is required"), nil
+	}
+	if err := s.authorizeActor(ctx, in.ActorName); err != nil {
+		return mcpsdk.NewToolResultError(err.Error()), nil
 	}
 	if s.opts.Evolver == nil {
 		return mcpsdk.NewToolResultError("propose_contract_evolution is not available: semantic compiler not configured (set -llm-model or BOUNDARY_LLM_MODEL)"), nil

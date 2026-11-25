@@ -97,7 +97,7 @@ else
   "$BOUNDARY_MCP_BIN" \
     -transport http \
     -addr "${BOUNDARY_MCP_ADDR:-127.0.0.1:0}" \
-    -token "$TOKEN" \
+    -actor-token "$ACTOR=$TOKEN" \
     -governance "$ROOT_DIR/governance" \
     -sdk /sdk \
     -sdk-out "$ROOT_DIR/sdk" \
