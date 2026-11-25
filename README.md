@@ -6,7 +6,7 @@
 
 ## Status
 
-**Phase 6 experiment implemented and seed-calibrated; versioning prototype added.** `internal/judge` calls JEV through OpenRouter's typed System One API and is mandatory whenever the semantic compiler is enabled. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-judge path. The Phase 5 litmus remains green. Real-proposal calibration is still required before accepting ADR-0001. The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+**Semantic engine enforced; litmus and versioning green.** The semantic engine (`internal/judge`) is the protocol-management core: it calls JEV through OpenRouter's typed System One API to decide whether a proposal is the right protocol, while `flatc` decides whether that decision is expressible and wire-compatible. The gate is mandatory whenever the semantic compiler is enabled and fails closed. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-gate path. The Phase 5 litmus remains green. The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model, plus [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
 
 ## Why Boundary-MCP Exists: The Illusion of JSON Flexibility
 
@@ -37,19 +37,30 @@ LLM-assisted software engineering tends to fail in three predictable ways:
 
 boundary-mcp addresses each of them:
 
-- **Design plane vs. data plane** — LLMs are used only at design/governance time. Runtime is pure binary.
+- **Design plane vs. data plane** — the semantic engine and its gates operate only at design/governance time. Runtime is pure binary.
 - **Capability-based isolation** — each actor is developed in a `bwrap`/container sandbox that cannot see other actors and has read-only access to SDK bindings.
 - **Bidirectional contracts** — `purpose.md` and `protocol.fbs` co-evolve behind deterministic gates (`flatc --conform`).
+- **Semantic gate** — whether a change is the *right* protocol (intent fit, scope, invariants, drift) is decided by a calibrated engine, not left to the implementing agent's interpretation.
 - **Black-box verification** — hidden property-based and state-machine tests run against actor binaries, with only minimal counterexamples returned to the agent.
 
 ## Architecture at a glance
 
 ```text
-        DESIGN PLANE (LLM + governance)          DATA PLANE (runtime)
-  purpose.md <--> protocol.fbs --[flatc]--> SDK   Actor A ==[FlatBuffers]==> Actor B
-        |                    |
-        +----[hidden tests]--+--> verify_actor_behavior
+        DESIGN PLANE (subjective + deterministic)          DATA PLANE (runtime)
+
+  intent --> semantic engine (JEV) --> purpose.md + protocol.fbs --> [flatc] --> SDK
+                    |                              |
+                    |                              +--> [harness] --> verify_actor_behavior
+                    |
+                    +--> "is this the right protocol?"
+
+  [flatc]   "is it expressible and compatible?"
+  [harness] "does the actor obey it?"
+
+  Actor A ==[FlatBuffers]==> Actor B
 ```
+
+The semantic engine decides *whether a change is legitimate*. `flatc`, the harness and the version store make that decision expressible, honored and attributable. They are not an appendix to a deterministic core; they are the gates and the ledger the engine drives. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md).
 
 Each agent session sees only:
 
@@ -98,7 +109,7 @@ flatc --conform base next   wire compatibility  fail -> rejected
 SDK dry-run                  Go/Rust bindings     fail -> rejected
         |
         v
-JEV judge (mandatory)        semantic review     reject -> rejected
+semantic gate (JEV)          is this legitimate? reject -> rejected
         |                                        review -> escalated
         v
 atomic commit + history snapshot + SDK regeneration
@@ -116,7 +127,7 @@ This is a **single-line, auto-commit** model:
 - there is no draft, candidate, promotion or abandonment state yet;
 - history records commits, not rejected proposals.
 
-The judge fails closed. If the semantic compiler is enabled, a missing OpenRouter key stops startup; there is no supported operating mode without the judge.
+The semantic gate fails closed. If the semantic compiler is enabled, a missing OpenRouter key stops startup; there is no supported operating mode without the gate.
 
 ### Versioned evolution loop (Designed)
 
@@ -177,7 +188,7 @@ A drafted change does not affect the active contract. Actors can be verified aga
 | Actor context, sandbox and hidden-suite verification | Current |
 | `propose_contract_evolution` auto-commit | Current |
 | Manual `-sync` reconciliation | Current |
-| Mandatory JEV judge with the semantic compiler | Current |
+| Semantic gate (JEV) enforced with the semantic compiler | Current |
 | History snapshots and diffs | Current |
 | Content-addressed snapshots, aliases, adoption pins | Current |
 | `flatc --conform` + reflection compatibility manifest | Current |
@@ -238,7 +249,7 @@ The target layout (see the architecture document for details):
     ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
     ├── governance/          # purpose.md parser and actor filtering
     ├── harness/             # .bfbs reflection, frame builder, verifier engines
-    ├── judge/               # advisory JEV / System One judge
+    ├── judge/               # semantic gate: JEV / System One judgments
     ├── llm/                 # OpenAI-compatible structured-output client
     ├── mcp/                 # MCP tools, handlers, HTTP auth
     └── versioning/          # version hashes, aliases, compatibility manifests
@@ -251,7 +262,7 @@ The target layout (see the architecture document for details):
 - **Bubblewrap** (`bwrap`) on Linux, for sandboxed agent sessions
 - **opencode**, for the agent-facing workflow
 - An **OpenAI-compatible LLM endpoint** (optional), for the semantic compiler
-- An **OpenRouter API key** (required when the semantic compiler is enabled), for the JEV semantic judge
+- An **OpenRouter API key** (required when the semantic compiler is enabled), for the semantic gate (JEV)
 
 ## Development
 
@@ -286,30 +297,30 @@ make build
 ./bin/boundary-mcp -sync -governance governance
 ```
 
-The LLM may only propose; `flatc --binary --schema` and `flatc --conform` decide whether a change is valid. Committed changes are written atomically and snapshotted under `governance/history/<timestamp>_<actor>/` with `diff.patch` and `meta.json`. Without an LLM configured, the tool reports that the compiler is unavailable.
+The semantic engine decides whether the proposal is the right protocol; `flatc --binary --schema` and `flatc --conform` decide whether it is valid and compatible. A change commits only when both agree. Committed changes are written atomically and snapshotted under `governance/history/<timestamp>_<actor>/` with `diff.patch` and `meta.json`. Without an LLM configured, the tool reports that the compiler is unavailable.
 
-## Semantic judge (experiment)
+## Semantic engine (protocol management)
 
-The advisory judge runs after `flatc` and before commit:
+The semantic engine runs after `flatc` and before commit. It answers the question `flatc` cannot: is this the right protocol?
 
 ```bash
 export OPENROUTER_API_KEY=...
 ./bin/boundary-mcp -llm-model ...
 ```
 
-It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`) and never replaces `flatc` or the harness. The judge is mandatory whenever the semantic compiler is enabled: startup fails if no OpenRouter key resolves. There is no product off switch; unit tests use a fake judge. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
+It calls JEV through OpenRouter's typed System One API (`POST /api/v1/systemone`, pinned `typesafe/jev-1.14`). It is authoritative for intent fit, scope, invariants and semantic drift; `flatc` remains authoritative for syntax and wire compatibility, and the harness for behavior. None of them can overrule another's domain. The gate is mandatory whenever the semantic compiler is enabled: startup fails if no OpenRouter key resolves. There is no product off switch; unit tests use a fake judge. For local runs, when `OPENROUTER_API_KEY` is unset, the key is read from opencode's auth store (`~/.local/share/opencode/auth.json`); production deployments should set the environment variable.
 
 The calibrated defaults are `-judge-review-at 0.40` and `-judge-reject-at 0.70`. Run the labeled benchmark with:
 
 ```bash
 go run ./cmd/judge-eval -cases internal/judge/testdata/cases
 make judge-calibrate   # built-in 100-case synthetic set
-make judge-e2e         # one live compiler -> judge proposal
+make judge-e2e         # one live compiler -> gate proposal
 ```
 
-A 100-case synthetic calibration at 0.40/0.70 produced 0 false allows across two runs; false escalations on compatible cases were 0 in the first run and 1 in the second (allow maximum 0.39–0.42), while semantic violations started at 0.89. p95 was 356–558 ms and the run cost ≈ $0.0055 (≈ $0.00005 per case). JEV probabilities vary between runs; the seed set is template-generated, so revalidate on real proposals before accepting ADR-0001.
+A 100-case synthetic calibration at 0.40/0.70 produced 0 false allows across two runs; false escalations on compatible cases were 0 in the first run and 1 in the second (allow maximum 0.39–0.42), while semantic violations started at 0.89. p95 was 356–558 ms and the run cost ≈ $0.0055 (≈ $0.00005 per case). JEV probabilities vary between runs, so the verdict is only as stable as its binding to the content hash (ADR-0003 follow-up).
 
-See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md).
+See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) for the gate decision and [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model.
 
 ## Protocol versions and compatibility
 
@@ -357,13 +368,14 @@ Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` 
 
 ## Documentation
 
-- [Architecture specification](docs/ARCHITECTURE.md) — topology, contracts, tool specs, isolation model, and roadmap.
+- [Architecture specification](docs/ARCHITECTURE.md) — topology, layer model, tool specs, isolation model, and roadmap.
 - [Workflows](docs/WORKFLOWS.md) — actor loop, auto-commit evolution, versioned draft lifecycle, compatibility and breaking changes.
 - [Litmus example](examples/litmus/README.md) — two-actor acceptance fixture and hidden suites.
-- [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — implemented Phase 6 judge; mandatory with the semantic compiler.
+- [ADR-0003: Semantic Engine as Protocol-Management Core](docs/adr/0003-semantic-engine-as-protocol-management-core.md) — the four layers and their authority split.
+- [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — JEV gate decision; title retained as the historical record.
 - [ADR-0002: Content-Addressed Protocol Versions](docs/adr/0002-content-addressed-protocol-versions.md) — version hashes, compatibility classes, aliases and actor adoption.
 - [ADR index](docs/adr/README.md) — conventions and decision history.
 
 ## Roadmap
 
-The MVP is organized in five phases, from the deterministic FlatBuffers core to a disposability litmus test. The Phase 6 judge experiment and the ADR-0002 versioning prototype build on top. See [Implementation Roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
+The phase numbering records **construction order, not architecture hierarchy**. The semantic engine is the protocol-management core from the moment the semantic compiler is enabled (ADR-0003); the deterministic layers are the gates and the ledger it drives, and the ADR-0002 versioning prototype is its identity layer. See [Implementation Roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).

@@ -2,6 +2,8 @@
 
 **Status:** Accepted
 
+> **Terminology note (2026-11-25).** [ADR-0003](0003-semantic-engine-as-protocol-management-core.md) replaces "advisory judge" with "semantic engine" / "semantic gate". The decision below is unchanged.
+
 **Context:** boundary-mcp already has a single governed evolution path: agents propose through `propose_contract_evolution`, `flatc` checks syntax and wire compatibility, the JEV judge reviews semantics, and accepted changes are committed with a history snapshot. That is evolution management, but it is a single active line with no explicit version identity, no draft lifecycle, no abandonment record, and no way to reason about which actors have adopted a change.
 
 The project now needs to make protocol evolution observable and negotiable:

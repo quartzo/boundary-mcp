@@ -1,9 +1,11 @@
 # ADR-0001: Advisory Semantic Judge for Contract Evolution
 
-- **Status:** Proposed (Phase 6 experiment)
+- **Status:** Accepted (implemented; framing superseded by [ADR-0003](0003-semantic-engine-as-protocol-management-core.md))
 - **Date:** 2026-11-24
 - **Deciders:** boundary-mcp maintainers
 - **Supersedes:** none
+
+> **Update (2026-11-25).** This record keeps the language it was decided with — "advisory", "experiment", "never the contract oracle". The gate was enforced from the start and is now the protocol-management core; [ADR-0003](0003-semantic-engine-as-protocol-management-core.md) supersedes the framing while keeping the decision. Read "advisory judge" below as "semantic gate".
 
 ## Context
 

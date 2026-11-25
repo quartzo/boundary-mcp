@@ -2,6 +2,8 @@
 
 This document describes the workflows boundary-mcp is designed around. It separates what is implemented today from the target lifecycle, so the documentation does not imply that a designed step already runs.
 
+Protocol management is a subjective decision: whether a change is the **right** protocol. The workflows below separate that decision — owned by the semantic engine — from the deterministic layers that make it expressible, compatible, honored and attributable. See [ADR-0003](adr/0003-semantic-engine-as-protocol-management-core.md).
+
 **Legend**
 
 - **Current** — implemented in this repository and covered by tests.
@@ -15,10 +17,10 @@ This document describes the workflows boundary-mcp is designed around. It separa
 | Architect / owner | Owns governance, approves promotions and aliases, and authorizes a new major line for a breaking change. |
 | `boundary-mcp` | The only agent-facing write path for the contract. Runs the compiler, gates, history, SDK regeneration and version metadata. |
 | `flatc` | Deterministic syntax/type gate and `--conform` wire-compatibility gate. |
-| JEV | Advisory semantic judge. Classifies intent, scope, drift and (designed) role-specific impact. It never decides wire compatibility. |
+| Semantic engine (JEV) | The protocol-management core. Decides whether a change is the right protocol: intent fit, scope, invariants, drift and (designed) role-specific impact. It never decides wire compatibility. |
 | Harness | Black-box behavioral verification against hidden suites. |
 
-The deterministic gates are authoritative. The judge can reject or escalate a proposal, but it cannot approve a schema that `flatc` rejects, and it cannot replace the harness.
+Each layer is authoritative inside its own domain. The semantic engine decides legitimacy and can reject or escalate; `flatc` decides conformance and cannot be overruled by a semantic verdict; the harness decides behavior; versioning decides identity. None of them can overrule another's domain.
 
 ## 2. Actor development (Current)
 
@@ -69,7 +71,7 @@ flatc --conform base candidate   wire compatibility  fail -> rejected
 SDK dry-run (Go/Rust)            bindings still build fail -> rejected
         |
         v
-JEV judge                        mandatory           reject -> rejected
+semantic gate (JEV)              mandatory           reject -> rejected
         |                                            review -> escalated
         v
 atomic commit
@@ -82,7 +84,7 @@ atomic commit
 actor calls verify_actor_behavior(actor)
 ```
 
-`propose_contract_evolution` is the only agent-facing write path. The LLM may propose, but `flatc` decides whether the proposal is valid.
+`propose_contract_evolution` is the only agent-facing write path. The semantic engine decides whether the proposal is the right protocol; `flatc` decides whether it is valid and compatible. The change commits only when both agree.
 
 The current model is **single-line and auto-commit**:
 
@@ -96,8 +98,8 @@ Result statuses:
 | Status | Meaning |
 | --- | --- |
 | `committed` | All gates passed and the active artifacts were replaced. |
-| `rejected` | Syntax, wire compatibility, SDK dry-run or the judge rejected it. Diagnostics are returned. |
-| `escalated` | The judge is in the review band; the change is not committed. |
+| `rejected` | Syntax, wire compatibility, SDK dry-run or the semantic gate rejected it. Diagnostics are returned. |
+| `escalated` | The semantic gate is in the review band; the change is not committed. |
 | `unchanged` | The candidate is identical to the current artifacts. |
 
 ## 4. Manual edit sync (Current)
@@ -118,7 +120,7 @@ detect which artifact changed (latest history snapshot, then mtime)
         +--> protocol.fbs changed -> LLM updates purpose.md + state_machine.json
         |
         v
-same flatc + SDK + judge + commit pipeline
+same flatc + SDK + semantic gate + commit pipeline
 ```
 
 If both artifacts changed since the last snapshot, `-sync` refuses to guess and returns an error. This path is for the architect; the sandbox still has no write access to governance.
@@ -200,7 +202,7 @@ The analysis has three layers:
 | --- | --- | --- |
 | Wire compatibility | `flatc --conform` | Current |
 | Structural diff | `.bfbs` reflection diff | Current |
-| Semantic and role impact | JEV classifier | Designed |
+| Semantic and role impact | Semantic engine (JEV) | Designed |
 
 The current compatibility manifest records:
 
@@ -408,9 +410,9 @@ Rules:
 | `flatc` syntax/type error | Rejected; exact diagnostics returned; no commit. |
 | `flatc --conform` failure | Rejected on the active line; open the major-line workflow if the break is intentional. |
 | SDK dry-run failure | Rejected; no commit. |
-| Judge reject | Rejected; diagnostics returned; no commit. |
-| Judge review | Escalated; no commit; human review required. |
-| Judge/provider outage | Proposals fail closed. The judge is mandatory whenever the semantic compiler is enabled; there is no product off switch. |
+| Semantic gate reject | Rejected; diagnostics returned; no commit. |
+| Semantic gate review | Escalated; no commit; human review required. |
+| Semantic gate/provider outage | Proposals fail closed. The gate is mandatory whenever the semantic compiler is enabled; there is no product off switch. |
 | Actor verification failure | Minimal counterexample returned; the actor must change, not the contract. |
 | Both artifacts edited before `-sync` | Error; the architect must choose one source of truth. |
 
@@ -422,7 +424,7 @@ Rules:
 # Actor session
 ./cmd/sandbox-run/sandbox-run.sh actor_ingest
 
-# Semantic compiler / judge
+# Semantic compiler / semantic gate
 ./bin/boundary-mcp -llm-model ...
 ./bin/boundary-mcp -sync -governance governance
 
@@ -465,7 +467,7 @@ These commands are intentionally not exposed until the compiler supports draft-f
 | Hidden-suite verification | Current |
 | `propose_contract_evolution` auto-commit | Current |
 | Manual `-sync` reconciliation | Current |
-| Mandatory JEV judge when the compiler is enabled | Current |
+| Semantic gate (JEV) enforced when the compiler is enabled | Current |
 | History snapshots and diffs | Current |
 | Content-addressed version snapshots | Current |
 | Aliases and actor adoption pins | Current |

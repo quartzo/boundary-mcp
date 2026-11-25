@@ -25,7 +25,8 @@ The system solves three structural failure modes in current LLM-assisted softwar
 
 ### Core Principles
 
-- **Separation of Design Plane and Data Plane:** Natural language and LLMs operate exclusively at design/governance time. At *runtime*, processes (black boxes) communicate strictly via **FlatBuffers** (*zero-copy* binary) over IPC, Unix Domain Sockets, or NATS.
+- **Semantic protocol management:** The contract is managed by a subjective engine that decides *what the protocol should mean* — intent fit, scope, invariants and drift. Deterministic gates decide whether that decision is expressible, wire-compatible and honored. The engine drives; the gates execute.
+- **Separation of Design Plane and Data Plane:** The semantic engine and its gates operate exclusively at design/governance time. At *runtime*, processes (black boxes) communicate strictly via **FlatBuffers** (*zero-copy* binary) over IPC, Unix Domain Sockets, or NATS.
 - **Capability-Based Physical Isolation:** Each actor is developed inside an isolated agent session (`opencode` running inside a `bwrap`/container sandbox) that **cannot see** the source code of other actors and lacks write permissions to contracts.
 - **Bidirectional Synchronization (`purpose.md` ↔ `protocol.fbs`):** The verbal purpose document and the binary schema co-evolve through a semantic compiler encapsulated behind deterministic gatekeepers (`flatc --conform`).
 - **Blind Behavioral Verification (Black-Box Testing):** The MCP server induces and executes deterministic state-machine and property-based tests against actor binaries (both as client and server), hiding fuzzing vectors from the implementing agent to prevent overfitting.
@@ -43,9 +44,11 @@ The system solves three structural failure modes in current LLM-assisted softwar
 | |                                                                      | |
 | |   [purpose.md] <--> [Semantic Compiler (LLM)] <--> [protocol.fbs]    | |
 | |                        |                           |                 | |
-| |            [Boundary Test Generator]          [flatc CLI]            | |
+| |            [Semantic Engine (JEV gate)]        [flatc CLI]           | |
 | |                        |                           |                 | |
-| |         [Deterministic Harness (rapid)]    [Read-Only SDKs]          | |
+| |            [Boundary Test Generator]       [Read-Only SDKs]          | |
+| |                        |                                             | |
+| |         [Deterministic Harness (rapid)]                              | |
 | +----------------------------------------------------------------------+ |
 +-----------------^--------------------------------------^-----------------+
                   | MCP (stdio/HTTP)                     | MCP (stdio/HTTP)
@@ -210,7 +213,7 @@ Invoked by the human architect (or a file watcher) whenever `purpose.md` or `pro
 
 [ADR-0002](adr/0002-content-addressed-protocol-versions.md) adds a content-addressed layer around the auto-commit path. A version is the SHA-256 hash of `purpose.md`, `protocol.fbs` and `state_machine.json`; actors pin the version they adopted, and `versionctl` records human aliases such as `v0`.
 
-Compatibility is a relation between a base and a candidate version. `flatc --conform` decides wire compatibility; a reflection diff records structural changes; the JEV judge will classify semantic and role-specific impact (`producer_only`, `consumer_only`, `requires_peer_upgrade`). A required field added to an existing table is a concrete case that `flatc` accepts but must be treated as breaking for old peers.
+Compatibility is a relation between a base and a candidate version. `flatc --conform` decides wire compatibility; a reflection diff records structural changes; the semantic engine will classify semantic and role-specific impact (`producer_only`, `consumer_only`, `requires_peer_upgrade`). A required field added to an existing table is a concrete case that `flatc` accepts but must be treated as breaking for old peers.
 
 The current prototype is read-only with respect to the active contract: `snapshot`, `compat`, `list`, `show`, `alias` and `pin`. Draft creation, promotion, abandonment, the wire-version field and the pairwise adoption matrix are follow-ups. The compiler still commits proposals directly; the draft lifecycle is not yet wired into `propose_contract_evolution`.
 
@@ -304,6 +307,8 @@ The launcher:
 
 ## 8. Implementation Roadmap (Go MVP)
 
+> The phase numbering records **construction order, not architecture hierarchy**. The semantic engine is the protocol-management core from the moment the semantic compiler is enabled ([ADR-0003](adr/0003-semantic-engine-as-protocol-management-core.md)); later phases extend it rather than adding it on top.
+
 ### Phase 1: Deterministic Core & CLI (`internal/fbs`)
 
 - [x] Initialize Go module (`go mod init boundary-mcp`).
@@ -338,9 +343,11 @@ The launcher:
 
 `examples/litmus/` is the Phase 5 fixture: contract, two Go actors, hidden suites, `make litmus`, and `scripts/disposability.sh` for the destructive reconstruction run.
 
-### Proposed (not part of the MVP): Advisory Semantic Judge (ADR-0001)
+### Core layer: Semantic engine (ADR-0001, ADR-0003)
 
-A Phase 6 experiment adds an **advisory** semantic judge (JEV / System One via OpenRouter's typed System One API) between the LLM proposal and the deterministic gates. It catches semantic drift that `flatc` cannot see, triages harness counterexamples and scores litmus reconstructions with cheap calibrated judgments. It runs in `enforce` mode in the experiment because there is no production traffic, and it must never replace `flatc --conform` or the harness as the contract oracle. See [ADR-0001](adr/0001-advisory-semantic-judge.md).
+The semantic engine (JEV / System One via OpenRouter's typed System One API) is the protocol-management core. It answers the question `flatc` cannot: is this the right protocol? It catches semantic drift — intent mismatch, out-of-scope edits, dropped invariants, purpose/protocol divergence — and enforces a policy over calibrated judgments. It is mandatory whenever the semantic compiler is enabled and fails closed.
+
+Its authority is bounded by domain, not by rank: `flatc` remains the conformance oracle for syntax and wire compatibility, and the harness remains the behavior oracle. A semantic verdict can never approve a schema that does not compile or an actor that fails its suite. See [ADR-0003](adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model and [ADR-0001](adr/0001-advisory-semantic-judge.md) for the gate decision.
 
 ### Prototype: Versioned Evolution (ADR-0002)
 
