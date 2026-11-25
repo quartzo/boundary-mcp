@@ -107,8 +107,12 @@ could not read `actor_ingest` or the hidden suites.
 
 The agent replaced the original framing helper with a single self-contained
 `main.go`, used only the generated SDK, the FlatBuffers runtime and the
-standard library, and passed its own smoke tests before invoking
-`verify_actor_behavior`.
+standard library, and passed its own smoke tests before the harness ran the
+hidden suite from outside the session.
+
+Verification is no longer an MCP tool. `make litmus` runs
+`examples/litmus/verify`, which builds each actor and executes the behavioral
+suites directly; CI can run the same command.
 
 ## Modules
 

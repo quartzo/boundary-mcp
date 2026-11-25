@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"boundary-mcp/internal/harness"
-	"boundary-mcp/internal/mcp"
 )
 
 func main() {
@@ -37,7 +36,7 @@ func main() {
 
 	failed := false
 	for _, actor := range []string{"actor_enrich", "actor_ingest"} {
-		result, err := verifier.Verify(ctx, mcp.VerifyRequest{ActorName: actor})
+		result, err := verifier.Verify(ctx, harness.VerifyRequest{ActorName: actor})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: ERROR: %v\n", actor, err)
 			failed = true

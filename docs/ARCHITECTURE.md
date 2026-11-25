@@ -1,5 +1,7 @@
 # Boundary-MCP: Purpose-Driven Development Architecture with Deterministic Binary Contracts
 
+> **Scope change in progress (2026-11-25).** This specification still describes the actor runtime and actor-behavior verification that [ADR-0004](adr/0004-protocol-only-mcp.md) removes from the control plane. §6 (test induction) and §7 (physical isolation) are the sections most affected. The target architecture and staged work are in [PLAN.md](PLAN.md); treat this document as the current implementation until the plan's stages land.
+
 ## Contents
 
 1. [Overview and Architectural Thesis](#1-overview-and-architectural-thesis)
@@ -130,7 +132,7 @@ Example:
 
 ## 5. boundary-mcp Tool Specifications
 
-The `boundary-mcp` server exposes 3 actor-facing MCP tools. It runs over stdio for direct sessions; sandboxed sessions connect to a control-plane instance over loopback Streamable HTTP with a per-session bearer token (see §7). The fourth entry, `sync_from_manual_edit` (§5.4), is an administrative CLI trigger rather than an MCP tool.
+The `boundary-mcp` server exposes two actor-facing MCP tools (`get_boundary_context`, `propose_contract_evolution`) and one protocol-testing tool (`get_protocol_tests`), plus protocol resources addressed by content hash. It runs over stdio for direct sessions; remote sessions connect to a control-plane instance over Streamable HTTP with a bearer token. `sync_from_manual_edit` (§5.4) is an administrative CLI trigger rather than an MCP tool.
 
 ### 5.1 `get_boundary_context`
 
@@ -173,33 +175,12 @@ The sole mechanism through which an agent can request changes to the protocol or
    - Writes `governance/protocol.fbs`, `governance/purpose.md` and `governance/state_machine.json` atomically.
    - Saves a snapshot under `governance/history/<timestamp>_<actor>/` with the three artifacts, a human-readable `diff.patch` and a `meta.json` (intent, direction, model, affected invariants).
    - Recompiles SDKs into `/sdk/go` and `/sdk/rust` (host paths: `sdk/go` and `sdk/rust`).
-   - Regenerates boundary tests in `governance/hidden_tests/` (Phase 4 hook).
+   - Regenerates boundary tests in `governance/protocol_tests/` (Phase 4 hook).
    - Marks dependent consumer actors as `STALE` in the MCP's internal state (Phase 4 hook).
 
-### 5.3 `verify_actor_behavior`
+### 5.3 `verify_actor_behavior` (removed)
 
-Compiles the actor binary and subjects it to the hidden suite of deterministic tests.
-
-**Input:**
-
-```json
-{ "actor_name": "string", "entrypoint_cmd": "string" }
-```
-
-**Behavior:**
-
-1. Compiles the code inside the actor's directory (e.g., `go build` or `cargo build --release`).
-2. Runs the **Server Harness** (if the actor receives messages) and/or the **Client Harness** (if the actor initiates messages) using the hidden suites in `governance/hidden_tests/`.
-
-**Return Value to Agent:**
-
-- **On pass:**
-
-  ```json
-  { "status": "PASS", "cases_executed": 500, "p99_latency_us": 42 }
-  ```
-
-- **On failure:** Returns only the minimal counterexample (input payload rendered as readable JSON, actual response observed, violated invariant `INV-XX`), never the source code of the test generator.
+`verify_actor_behavior` is no longer an MCP tool. The server does not build or run actor code. Behavioral verification is a reference tool (`internal/harness`, driven by `examples/litmus/verify`) that the user's CI runs against the actor directory. See [ADR-0004](adr/0004-protocol-only-mcp.md) and [PLAN.md](PLAN.md).
 
 ### 5.4 `sync_from_manual_edit` (Administrative Trigger / CLI)
 
@@ -255,7 +236,7 @@ When a node in the topology represents an external service that does not nativel
 
 ### 6.4 Hidden Test Suites (`governance/hidden_tests/<actor>.json`)
 
-`verify_actor_behavior` loads a trusted suite per actor:
+The reference verifier (`examples/litmus/verify`) loads a trusted suite per actor:
 
 ```json
 {
@@ -319,7 +300,7 @@ The launcher:
 
 ### Phase 2: MCP Server & Sandbox (`internal/mcp` & `cmd/sandbox-run`)
 
-- [x] Build Go MCP server (using `github.com/mark3labs/mcp-go`) exposing `get_boundary_context`, `propose_contract_evolution`, and `verify_actor_behavior`, over stdio and loopback Streamable HTTP.
+- [x] Build Go MCP server (using `github.com/mark3labs/mcp-go`) exposing `get_boundary_context` and `propose_contract_evolution` over stdio and loopback Streamable HTTP (protocol resources and `get_protocol_tests` were added later).
 - [x] Create `sandbox-run` wrapper with `bwrap` and an `opencode.json` template wired to the `boundary-mcp` binary, keeping governance outside the sandbox mount namespace.
 
 ### Phase 3: Bidirectional Semantic Compiler (`internal/compiler`)
@@ -331,7 +312,7 @@ The launcher:
 
 - [x] Implement `.bfbs` reflection (tables, fields, types, enums, defaults), a dynamic FlatBuffer builder for seed/response frames, and structural mutation generation (boundary scalars, invalid UTF-8, truncation, corrupted offsets), with `pgregory.net/rapid` property tests.
 - [x] Implement the Reference Mock Peer (state-machine mock) used to verify client actors, plus the Harness Client for receiver actors, over length-prefixed Unix-socket framing.
-- [x] Wire the harness into `verify_actor_behavior` with a JSON suite/run convention (`governance/hidden_tests/<actor>.json`), dynamic seed frames and scripted peer scenarios.
+- [x] Wire the harness into the actor verification path (later moved out of the MCP server to `examples/litmus/verify`) with a JSON suite/run convention, dynamic seed frames and scripted peer scenarios.
 - [ ] Sandbox the verifier's build/run subprocesses (for example with `bwrap`) before using it on untrusted actor code.
 
 ### Phase 5: Litmus Test (Thesis Validation)

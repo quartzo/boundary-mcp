@@ -4,6 +4,8 @@
 
 **boundary-mcp** is a governance control plane that lets AI coding agents (such as [`opencode`](https://opencode.ai)) build isolated actors without leaking implementation details into each other. Agents work from a verbal purpose document and a compiled schema, while actors communicate at runtime exclusively through zero-copy FlatBuffers over IPC, Unix Domain Sockets, or NATS.
 
+> **Scope change in progress (2026-11-25).** boundary-mcp is being narrowed to **protocol management and protocol testing**. The actor runtime and actor-code execution leave the control plane; the user's coder connects as an external MCP client and CI owns the merge gate. Stages 1–2 have landed: normative protocol test specs are published as MCP resources (`boundary://protocol/{hash}/tests`, `get_protocol_tests`), and `verify_actor_behavior` has been removed. The behavioral verifier runs from `examples/litmus/verify` or CI. See [docs/PLAN.md](docs/PLAN.md) and [ADR-0004](docs/adr/0004-protocol-only-mcp.md). Until the remaining stages land, the sections below that describe the `sandbox-run` product path document the current code, not the target.
+
 ## Status
 
 **Semantic engine enforced; litmus and versioning green.** The semantic engine (`internal/judge`) is the protocol-management core: it calls JEV through OpenRouter's typed System One API to decide whether a proposal is the right protocol, while `flatc` decides whether that decision is expressible and wire-compatible. The gate is mandatory whenever the semantic compiler is enabled and fails closed. A 100-case synthetic calibration set the default review threshold to 0.40, and `make judge-e2e` exercises the live compiler-to-gate path. The Phase 5 litmus remains green. The content-addressed versioning prototype (`versionctl`) snapshots the litmus contract as `v0`, classifies compatibility with `flatc --conform` plus a reflection diff, and records actor adoption. See [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model, plus [ADR-0001](docs/adr/0001-advisory-semantic-judge.md), [ADR-0002](docs/adr/0002-content-addressed-protocol-versions.md) and the [roadmap](docs/ARCHITECTURE.md#8-implementation-roadmap-go-mvp).
@@ -50,7 +52,7 @@ boundary-mcp addresses each of them:
 
   intent --> semantic engine (JEV) --> purpose.md + protocol.fbs --> [flatc] --> SDK
                     |                              |
-                    |                              +--> [harness] --> verify_actor_behavior
+                    |                              +--> [harness] --> actor suite (CI)
                     |
                     +--> "is this the right protocol?"
 
@@ -85,11 +87,14 @@ boundary-mcp outside the sandbox
         |
         +--> agent implements in /workspace
         |
-        +--> verify_actor_behavior(actor_x)
-                hidden suite -> PASS or minimal counterexample
+        +--> agent runs the protocol test spec locally
+        |       boundary://protocol/{hash}/tests
+        |
+        +--> CI builds the actor and runs its behavioral suite
+                PASS or minimal counterexample
 ```
 
-The sandbox has no access to `governance/`, other actors, or hidden tests. An actor cannot edit the contract; it can only request a change through the evolution loop.
+The sandbox has no access to `governance/`, other actors, or their tests. An actor cannot edit the contract; it can only request a change through the evolution loop.
 
 ### Evolution loop (Current)
 
@@ -115,7 +120,7 @@ semantic gate (JEV)          is this legitimate? reject -> rejected
 atomic commit + history snapshot + SDK regeneration
         |
         v
-actor calls verify_actor_behavior(actor)
+actor runs the protocol tests; CI runs the behavioral suite
 ```
 
 `-sync` is the administrative equivalent for manual edits to `purpose.md` or `protocol.fbs`. It detects the changed artifact, updates the counterpart with the LLM, and runs the same gates. If both artifacts changed, it refuses to guess.
@@ -322,6 +327,17 @@ A 100-case synthetic calibration at 0.40/0.70 produced 0 false allows across two
 
 See [ADR-0001](docs/adr/0001-advisory-semantic-judge.md) for the gate decision and [ADR-0003](docs/adr/0003-semantic-engine-as-protocol-management-core.md) for the layer model.
 
+## Protocol tests
+
+Protocol tests are published, not executed. The server validates every spec under `governance/protocol_tests/*.json` and exposes them for the active content hash:
+
+- `boundary://protocol/{hash}/fbs` — `protocol.fbs` and, when present, the compiled `.bfbs`
+- `boundary://protocol/{hash}/tests` — the normative specs
+- `boundary://protocol/{hash}/purpose` — the full `purpose.md`
+- `boundary://actor/{name}/context` — the filtered boundary view for one actor
+
+`get_protocol_tests` is the tool fallback for clients that do not read resources. A spec is declarative: `seeds` provide valid frames, `rules` carry explicit valid/invalid examples for semantic assertions, and `mutations` select structural cases. `internal/protocoltest` expands a spec deterministically (sorted cases, base64 frames) for the coder or CI to run. The protocol-test path never builds or runs actor code; `verify_actor_behavior` still exists until Stage 2 of the [plan](docs/PLAN.md) removes it.
+
 ## Protocol versions and compatibility
 
 Version identity is content-addressed. A snapshot hashes `purpose.md`, `protocol.fbs` and `state_machine.json`; the hash is the identity, while the date, actor and intent are annotations. A separate wire hash identifies `protocol.fbs` alone. Aliases such as `v0` are human pointers to immutable hashes.
@@ -341,7 +357,7 @@ Actor pins record adoption without changing the contract. The prototype does not
 
 ## Harness
 
-`internal/harness` verifies actor binaries without reading their source:
+`internal/harness` is the reference behavioral verifier used by the litmus example and by CI. It is no longer an MCP tool. It verifies actor binaries without reading their source:
 
 - `LoadSchema` parses the `.bfbs` emitted by `flatc --binary --schema`.
 - `Schema.Validate` and `BoundaryMutations` check frames and generate structural mutations (boundary scalars, invalid UTF-8, truncation, corrupted offsets).
@@ -349,7 +365,7 @@ Actor pins record adoption without changing the contract. The prototype does not
 - `ReferenceMockPeer` verifies actors that emit messages with scripted request/response scenarios, checks, delays and timeout/sequence paths.
 - A dynamic builder turns `.bfbs` metadata plus field values into valid FlatBuffers, so suites never carry base64 payloads.
 
-Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` loads a trusted suite per actor:
+Property tests in the harness use `pgregory.net/rapid`. `examples/litmus/verify` loads a trusted suite per actor:
 
 ```json
 {
@@ -364,13 +380,15 @@ Property tests in the harness use `pgregory.net/rapid`. `verify_actor_behavior` 
 }
 ```
 
-`mode: "client"` instead runs the Reference Mock Peer with `scenarios` and declarative checks (`regex`, `min`, `max`, `equals`). The verifier resolves actor workspaces with `-actors` (default `actors`) and suites with `-hidden-tests` (default `<governance>/hidden_tests`). `build` and `run` are trusted suite values; pin `build` there instead of relying on the agent-provided `entrypoint_cmd`. Verification subprocesses still run on the host — sandboxing them is the next hardening step.
+`mode: "client"` instead runs the Reference Mock Peer with `scenarios` and declarative checks (`regex`, `min`, `max`, `equals`). The reference verifier resolves actor workspaces and suites through `harness.VerifierOptions`. `build` and `run` are trusted suite values; pin `build` there. Verification subprocesses still run on the host — sandboxing them is the next hardening step.
 
 ## Documentation
 
 - [Architecture specification](docs/ARCHITECTURE.md) — topology, layer model, tool specs, isolation model, and roadmap.
 - [Workflows](docs/WORKFLOWS.md) — actor loop, auto-commit evolution, versioned draft lifecycle, compatibility and breaking changes.
+- [Plan: protocol-only boundary-mcp](docs/PLAN.md) — staged re-scoping: the actor runtime and actor execution leave the control plane.
 - [Litmus example](examples/litmus/README.md) — two-actor acceptance fixture and hidden suites.
+- [ADR-0004: Protocol Manager, Not an Agent Runtime or CI](docs/adr/0004-protocol-only-mcp.md) — target scope and the external-coder model.
 - [ADR-0003: Semantic Engine as Protocol-Management Core](docs/adr/0003-semantic-engine-as-protocol-management-core.md) — the four layers and their authority split.
 - [ADR-0001: Advisory Semantic Judge](docs/adr/0001-advisory-semantic-judge.md) — JEV gate decision; title retained as the historical record.
 - [ADR-0002: Content-Addressed Protocol Versions](docs/adr/0002-content-addressed-protocol-versions.md) — version hashes, compatibility classes, aliases and actor adoption.

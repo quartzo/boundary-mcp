@@ -1,5 +1,7 @@
 # Protocol Evolution Workflows
 
+> **Scope change in progress (2026-11-25).** §2–§3 describe actor verification and the sandboxed session that [ADR-0004](adr/0004-protocol-only-mcp.md) removes from the control plane. The target model separates contract management (this server), protocol tests (published as resources), and the merge gate (the user's CI). See [PLAN.md](PLAN.md).
+
 This document describes the workflows boundary-mcp is designed around. It separates what is implemented today from the target lifecycle, so the documentation does not imply that a designed step already runs.
 
 Protocol management is a subjective decision: whether a change is the **right** protocol. The workflows below separate that decision — owned by the semantic engine — from the deterministic layers that make it expressible, compatible, honored and attributable. See [ADR-0003](adr/0003-semantic-engine-as-protocol-management-core.md).
@@ -13,7 +15,7 @@ Protocol management is a subjective decision: whether a change is the **right** 
 
 | Role | Responsibility |
 | --- | --- |
-| Actor agent | Implements one actor from its boundary context, proposes contract changes, and verifies against hidden suites. |
+| Actor agent | Implements one actor from its boundary context, proposes contract changes, and runs the protocol test spec. |
 | Architect / owner | Owns governance, approves promotions and aliases, and authorizes a new major line for a breaking change. |
 | `boundary-mcp` | The only agent-facing write path for the contract. Runs the compiler, gates, history, SDK regeneration and version metadata. |
 | `flatc` | Deterministic syntax/type gate and `--conform` wire-compatibility gate. |
@@ -37,9 +39,10 @@ boundary-mcp running outside the sandbox
         |
         +--> agent implements in /workspace
         |
-        +--> verify_actor_behavior(actor_x)
-                - trusted hidden suite
-                - PASS, or a minimal counterexample
+        +--> agent runs the protocol test spec locally
+        |
+        +--> CI builds the actor and runs its behavioral suite
+                PASS, or a minimal counterexample
 ```
 
 The actor sandbox contains only:
@@ -48,7 +51,7 @@ The actor sandbox contains only:
 - the generated SDK mounted read-only;
 - the bearer-protected MCP endpoint.
 
-It does **not** contain `governance/`, other actors, or the hidden tests. The agent cannot change the contract from the sandbox; it can only request a change through the evolution workflow.
+It does **not** contain `governance/`, other actors, or their tests. The agent cannot change the contract from the sandbox; it can only request a change through the evolution workflow.
 
 ## 3. Proposal and auto-commit (Current)
 
@@ -81,7 +84,7 @@ atomic commit
   - OnCommit hook (stale marking placeholders)
         |
         v
-actor calls verify_actor_behavior(actor)
+actor runs the protocol tests; CI runs the behavioral suite
 ```
 
 `propose_contract_evolution` is the only agent-facing write path. The semantic engine decides whether the proposal is the right protocol; `flatc` decides whether it is valid and compatible. The change commits only when both agree.

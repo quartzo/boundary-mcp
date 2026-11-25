@@ -10,9 +10,9 @@ Use the `boundary` MCP server:
 - `get_boundary_context` (exposed as `boundary_get_boundary_context`) with
   `actor_name=actor_enrich` to obtain the filtered `purpose.md`, the full
   `protocol.fbs` and the read-only SDK path.
-- `verify_actor_behavior` (exposed as `boundary_verify_actor_behavior`) with
-  `actor_name=actor_enrich` and `entrypoint_cmd=go build -o bin/actor .` to run
-  the hidden suite.
+- `get_protocol_tests` (exposed as `boundary_get_protocol_tests`) to obtain
+  the normative protocol test spec. Use it to write your own tests; the
+  behavioral harness runs outside this session.
 
 Do not change the contract. If the contract is insufficient, propose an
 evolution through `boundary_propose_contract_evolution` instead of editing the

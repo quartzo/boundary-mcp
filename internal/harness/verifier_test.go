@@ -11,8 +11,6 @@ import (
 	"runtime"
 	"testing"
 	"time"
-
-	"boundary-mcp/internal/mcp"
 )
 
 func TestLoadSchemaFallsBackToFBS(t *testing.T) {
@@ -93,7 +91,7 @@ func TestVerifierServerMode(t *testing.T) {
 		t.Fatalf("NewVerifier: %v", err)
 	}
 
-	result, err := verifier.Verify(context.Background(), mcp.VerifyRequest{
+	result, err := verifier.Verify(context.Background(), VerifyRequest{
 		ActorName:     "actor_demo",
 		EntrypointCmd: "true",
 	})
@@ -170,7 +168,7 @@ func TestVerifierClientMode(t *testing.T) {
 		t.Fatalf("NewVerifier: %v", err)
 	}
 
-	result, err := verifier.Verify(context.Background(), mcp.VerifyRequest{
+	result, err := verifier.Verify(context.Background(), VerifyRequest{
 		ActorName:     "actor_demo",
 		EntrypointCmd: "true",
 	})

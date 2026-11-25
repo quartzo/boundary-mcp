@@ -22,9 +22,9 @@ type Options struct {
 	// Evolver backs propose_contract_evolution. Nil makes the tool report
 	// that the semantic compiler is not configured yet.
 	Evolver ContractEvolver
-	// Verifier backs verify_actor_behavior. Nil makes the tool report that
-	// the harness is not configured yet.
-	Verifier BehaviorVerifier
+	// ProtocolTestsDir contains protocol test specs. Defaults to
+	// <GovernanceDir>/protocol_tests.
+	ProtocolTestsDir string
 }
 
 // Server owns the MCP server and its tool handlers.
@@ -47,6 +47,9 @@ func New(opts Options) (*Server, error) {
 	if opts.Version == "" {
 		opts.Version = "dev"
 	}
+	if opts.ProtocolTestsDir == "" {
+		opts.ProtocolTestsDir = filepath.Join(opts.GovernanceDir, "protocol_tests")
+	}
 
 	for _, name := range []string{"purpose.md", "protocol.fbs"} {
 		path := filepath.Join(opts.GovernanceDir, name)
@@ -62,6 +65,7 @@ func New(opts Options) (*Server, error) {
 		mcpserver.WithToolCapabilities(false),
 	)
 	s.registerTools()
+	s.registerResources()
 	return s, nil
 }
 

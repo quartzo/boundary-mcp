@@ -63,7 +63,7 @@ AGENT_ARGS=(run --auto)
 if [[ -n "${LITMUS_MODEL:-}" ]]; then
   AGENT_ARGS+=(--model "$LITMUS_MODEL")
 fi
-AGENT_ARGS+=("Implement the task in /workspace/PROMPT.md. Use the boundary MCP tools. When you are done, call verify_actor_behavior for actor_enrich.")
+AGENT_ARGS+=("Implement the task in /workspace/PROMPT.md. Use the boundary MCP tools. The harness verifies your work after the session.")
 
 BOUNDARY_ROOT="$LITMUS_ROOT" \
 BOUNDARY_MCP_BIN="$MCP_BIN" \

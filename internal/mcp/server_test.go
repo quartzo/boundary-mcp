@@ -47,7 +47,7 @@ func TestListTools(t *testing.T) {
 	for _, tool := range res.Tools {
 		got[tool.Name] = true
 	}
-	for _, want := range []string{"get_boundary_context", "propose_contract_evolution", "verify_actor_behavior"} {
+	for _, want := range []string{"get_boundary_context", "propose_contract_evolution", "get_protocol_tests"} {
 		if !got[want] {
 			t.Errorf("tool %q is not registered (got %v)", want, got)
 		}
@@ -117,14 +117,6 @@ func TestUnavailableDependencies(t *testing.T) {
 	if !propose.IsError || !strings.Contains(toolText(propose), "semantic compiler not configured") {
 		t.Fatalf("propose result = %q (isError=%v), want a configuration error", toolText(propose), propose.IsError)
 	}
-
-	verify := callTool(t, c, "verify_actor_behavior", map[string]any{
-		"actor_name":     "actor_ingest",
-		"entrypoint_cmd": "go build ./...",
-	})
-	if !verify.IsError || !strings.Contains(toolText(verify), "harness not configured") {
-		t.Fatalf("verify result = %q (isError=%v), want a harness error", toolText(verify), verify.IsError)
-	}
 }
 
 func TestProposeContractEvolutionDelegates(t *testing.T) {
@@ -167,27 +159,6 @@ func TestProposeRequiresIntent(t *testing.T) {
 	}
 }
 
-func TestVerifyActorBehaviorDelegates(t *testing.T) {
-	t.Parallel()
-
-	verifier := &fakeVerifier{result: &VerifyResult{Status: "PASS", CasesExecuted: 500, P99LatencyUS: 42}}
-	c := startClient(t, newTestServer(t, Options{Verifier: verifier}))
-
-	res := callTool(t, c, "verify_actor_behavior", map[string]any{
-		"actor_name":     "actor_ingest",
-		"entrypoint_cmd": "go build ./...",
-	})
-	if res.IsError {
-		t.Fatalf("tool error: %s", toolText(res))
-	}
-	if verifier.got.ActorName != "actor_ingest" || verifier.got.EntrypointCmd != "go build ./..." {
-		t.Fatalf("verifier got %+v", verifier.got)
-	}
-	if !strings.Contains(toolText(res), "PASS") {
-		t.Fatalf("result = %q", toolText(res))
-	}
-}
-
 func TestNewRequiresGovernanceFiles(t *testing.T) {
 	t.Parallel()
 
@@ -204,17 +175,6 @@ type fakeEvolver struct {
 }
 
 func (f *fakeEvolver) Propose(_ context.Context, req ProposalRequest) (*ProposalResult, error) {
-	f.got = req
-	return f.result, f.err
-}
-
-type fakeVerifier struct {
-	got    VerifyRequest
-	result *VerifyResult
-	err    error
-}
-
-func (f *fakeVerifier) Verify(_ context.Context, req VerifyRequest) (*VerifyResult, error) {
 	f.got = req
 	return f.result, f.err
 }

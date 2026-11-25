@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,11 +29,6 @@ type proposeInput struct {
 	IntentDescription  string   `json:"intent_description"`
 	ProposedFBSSnippet string   `json:"proposed_fbs_snippet,omitempty"`
 	AffectsInvariants  []string `json:"affects_invariants,omitempty"`
-}
-
-type verifyInput struct {
-	ActorName     string `json:"actor_name"`
-	EntrypointCmd string `json:"entrypoint_cmd"`
 }
 
 func (s *Server) registerTools() {
@@ -73,19 +69,11 @@ func (s *Server) registerTools() {
 	)
 
 	s.mcp.AddTool(
-		mcpsdk.NewTool("verify_actor_behavior",
-			mcpsdk.WithDescription("Compile an actor and run the hidden deterministic boundary tests against it."),
-			mcpsdk.WithString("actor_name",
-				mcpsdk.Required(),
-				mcpsdk.Description("Actor to verify."),
-			),
-			mcpsdk.WithString("entrypoint_cmd",
-				mcpsdk.Required(),
-				mcpsdk.Description("Command used to build the actor inside its workspace (e.g. go build ./...)."),
-			),
-			mcpsdk.WithOutputSchema[VerifyResult](),
+		mcpsdk.NewTool("get_protocol_tests",
+			mcpsdk.WithDescription("Return the normative protocol test specs for the active protocol content hash."),
+			mcpsdk.WithReadOnlyHintAnnotation(true),
 		),
-		s.handleVerifyActorBehavior,
+		s.handleGetProtocolTests,
 	)
 }
 
@@ -160,32 +148,20 @@ func (s *Server) handleProposeContractEvolution(ctx context.Context, req mcpsdk.
 	return mcpsdk.NewToolResultStructured(res, formatProposalResult(res)), nil
 }
 
-func (s *Server) handleVerifyActorBehavior(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-	var in verifyInput
-	if err := req.BindArguments(&in); err != nil {
-		return mcpsdk.NewToolResultErrorf("invalid arguments: %v", err), nil
-	}
-	if strings.TrimSpace(in.ActorName) == "" {
-		return mcpsdk.NewToolResultError("actor_name is required"), nil
-	}
-	if strings.TrimSpace(in.EntrypointCmd) == "" {
-		return mcpsdk.NewToolResultError("entrypoint_cmd is required"), nil
-	}
-	if s.opts.Verifier == nil {
-		return mcpsdk.NewToolResultError("verify_actor_behavior is not available: deterministic harness not configured"), nil
-	}
-
-	res, err := s.opts.Verifier.Verify(ctx, VerifyRequest{
-		ActorName:     in.ActorName,
-		EntrypointCmd: in.EntrypointCmd,
-	})
+func (s *Server) handleGetProtocolTests(_ context.Context, _ mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+	hash, err := s.currentProtocolHash()
 	if err != nil {
-		return mcpsdk.NewToolResultErrorf("verification failed: %v", err), nil
+		return mcpsdk.NewToolResultError(err.Error()), nil
 	}
-	if res == nil {
-		return mcpsdk.NewToolResultError("verification returned no result"), nil
+	payload, err := s.protocolTestsPayload(hash)
+	if err != nil {
+		return mcpsdk.NewToolResultError(err.Error()), nil
 	}
-	return mcpsdk.NewToolResultStructured(res, formatVerifyResult(res)), nil
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return mcpsdk.NewToolResultErrorf("encode protocol tests: %v", err), nil
+	}
+	return mcpsdk.NewToolResultText(string(data)), nil
 }
 
 func formatBoundaryContext(out boundaryContextOutput) string {
@@ -210,17 +186,6 @@ func formatProposalResult(res *ProposalResult) string {
 	}
 	if res.Diagnostics != "" {
 		fmt.Fprintf(&b, "\ndiagnostics:\n%s\n", res.Diagnostics)
-	}
-	return b.String()
-}
-
-func formatVerifyResult(res *VerifyResult) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "status: %s\n", res.Status)
-	fmt.Fprintf(&b, "cases_executed: %d\n", res.CasesExecuted)
-	fmt.Fprintf(&b, "p99_latency_us: %d\n", res.P99LatencyUS)
-	if res.Counterexample != "" {
-		fmt.Fprintf(&b, "\ncounterexample:\n%s\n", res.Counterexample)
 	}
 	return b.String()
 }

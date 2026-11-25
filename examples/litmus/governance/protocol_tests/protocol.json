@@ -1,0 +1,56 @@
+{
+  "spec_version": 1,
+  "schema": "protocol.bfbs",
+  "seeds": [
+    {
+      "name": "request",
+      "table": "Envelope",
+      "values": {
+        "type": "REQUEST",
+        "request": {
+          "correlation_id": "0192f0a0-0000-7000-8000-000000000001",
+          "document_id": "12345678901234"
+        }
+      }
+    },
+    {
+      "name": "response",
+      "table": "Envelope",
+      "values": {
+        "type": "RESPONSE",
+        "response": {
+          "correlation_id": "0192f0a0-0000-7000-8000-000000000001",
+          "document_id": "12345678901234",
+          "confidence_score": 0.92,
+          "display_name": "Example Corp"
+        }
+      }
+    }
+  ],
+  "rules": [
+    {
+      "table": "EnrichRequest",
+      "field": "document_id",
+      "regex": "^[0-9]{14}$",
+      "valid": ["12345678901234"],
+      "invalid": ["", "1234", "1234567890123", "123456789012345", "abcdefghijklmn"]
+    },
+    {
+      "table": "EnrichRequest",
+      "field": "correlation_id",
+      "format": "uuidv7",
+      "valid": ["0192f0a0-0000-7000-8000-000000000001"],
+      "invalid": ["", "not-a-uuid", "0192f0a0-0000-4000-8000-000000000001"]
+    },
+    {
+      "table": "EnrichResponse",
+      "field": "confidence_score",
+      "min": 0,
+      "max": 1,
+      "valid": [0, 0.92, 1],
+      "invalid": [-0.1, 1.01]
+    }
+  ],
+  "mutations": ["truncate", "bad-offset", "invalid-utf8", "flip"],
+  "roundtrip": true
+}

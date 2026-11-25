@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"boundary-mcp/internal/fbs"
-	"boundary-mcp/internal/mcp"
 )
 
 // VerifierOptions configures the harness-backed behavior verifier.
@@ -28,7 +27,9 @@ type VerifierOptions struct {
 	Flatc *fbs.Compiler
 }
 
-// Verifier implements [mcp.BehaviorVerifier] using hidden JSON suites.
+// Verifier builds an actor and runs its hidden JSON suite.
+//
+// cmd/boundary-mcp adapts it to the MCP BehaviorVerifier interface.
 type Verifier struct {
 	opts VerifierOptions
 }
@@ -52,7 +53,7 @@ func NewVerifier(opts VerifierOptions) (*Verifier, error) {
 
 // Verify builds the actor, loads governance/hidden_tests/<actor>.json and runs
 // the requested mode.
-func (v *Verifier) Verify(ctx context.Context, req mcp.VerifyRequest) (*mcp.VerifyResult, error) {
+func (v *Verifier) Verify(ctx context.Context, req VerifyRequest) (*VerifyResult, error) {
 	actor := strings.TrimSpace(req.ActorName)
 	if actor == "" {
 		return nil, errors.New("harness: actor_name is required")
@@ -150,7 +151,7 @@ func (v *Verifier) loadSchema(ctx context.Context, suite *Suite) (*Schema, func(
 	return schema, func() {}, err
 }
 
-func (v *Verifier) verifyServer(ctx context.Context, suite *Suite, schema *Schema, workspace string) (*mcp.VerifyResult, error) {
+func (v *Verifier) verifyServer(ctx context.Context, suite *Suite, schema *Schema, workspace string) (*VerifyResult, error) {
 	seeds, err := buildFrames(schema, suite.Seeds)
 	if err != nil {
 		return nil, err
@@ -187,7 +188,7 @@ func (v *Verifier) verifyServer(ctx context.Context, suite *Suite, schema *Schem
 	return clientResult(report), nil
 }
 
-func (v *Verifier) verifyClient(ctx context.Context, suite *Suite, schema *Schema, workspace string) (*mcp.VerifyResult, error) {
+func (v *Verifier) verifyClient(ctx context.Context, suite *Suite, schema *Schema, workspace string) (*VerifyResult, error) {
 	total := &PeerReport{}
 	for _, spec := range suite.Scenarios {
 		report, err := v.runClientScenario(ctx, suite, schema, workspace, spec)
@@ -339,8 +340,8 @@ func (v *Verifier) dialWithRetry(ctx context.Context, socket string, timeout tim
 	}
 }
 
-func clientResult(report *ClientReport) *mcp.VerifyResult {
-	result := &mcp.VerifyResult{
+func clientResult(report *ClientReport) *VerifyResult {
+	result := &VerifyResult{
 		Status:        "PASS",
 		CasesExecuted: report.Cases,
 		P99LatencyUS:  report.P99LatencyUS,
@@ -357,8 +358,8 @@ func clientResult(report *ClientReport) *mcp.VerifyResult {
 	return result
 }
 
-func peerResult(report *PeerReport) *mcp.VerifyResult {
-	result := &mcp.VerifyResult{
+func peerResult(report *PeerReport) *VerifyResult {
+	result := &VerifyResult{
 		Status:        "PASS",
 		CasesExecuted: report.Cases,
 	}

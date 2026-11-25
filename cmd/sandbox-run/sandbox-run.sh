@@ -94,8 +94,6 @@ else
     -governance "$ROOT_DIR/governance" \
     -sdk /sdk \
     -sdk-out "$ROOT_DIR/sdk" \
-    -actors "$ROOT_DIR/actors" \
-    -hidden-tests "$ROOT_DIR/governance/hidden_tests" \
     -ready-file "$READY_FILE" \
     >"$LOG_FILE" 2>&1 &
   MCP_PID=$!

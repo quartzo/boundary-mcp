@@ -5,6 +5,7 @@
 | [0001](0001-advisory-semantic-judge.md) | Accepted (framing superseded by 0003) | Advisory semantic judge for contract evolution |
 | [0002](0002-content-addressed-protocol-versions.md) | Accepted | Content-addressed protocol versions, compatibility classes, adoption and aliases |
 | [0003](0003-semantic-engine-as-protocol-management-core.md) | Accepted | The semantic engine is the protocol-management core |
+| [0004](0004-protocol-only-mcp.md) | Accepted | boundary-mcp is a protocol manager, not an agent runtime or CI |
 
 ## Conventions
 
