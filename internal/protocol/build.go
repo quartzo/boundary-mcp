@@ -1,4 +1,4 @@
-package harness
+package protocol
 
 import (
 	"errors"
@@ -22,10 +22,10 @@ func (s *Schema) BuildFrame(spec FrameSpec) ([]byte, error) {
 		obj = s.Object(spec.Table)
 	}
 	if obj == nil {
-		return nil, fmt.Errorf("harness: unknown table %q", spec.Table)
+		return nil, fmt.Errorf("protocol: unknown table %q", spec.Table)
 	}
 	if obj.IsStruct {
-		return nil, fmt.Errorf("harness: cannot build root struct %s", ShortName(obj.Name))
+		return nil, fmt.Errorf("protocol: cannot build root struct %s", ShortName(obj.Name))
 	}
 
 	builder := flatbuffers.NewBuilder(1024)
@@ -36,7 +36,7 @@ func (s *Schema) BuildFrame(spec FrameSpec) ([]byte, error) {
 	if s.DeclaredFileIdent != "" {
 		fid := []byte(s.DeclaredFileIdent)
 		if len(fid) != 4 {
-			return nil, fmt.Errorf("harness: file_identifier must be 4 bytes (got %d)", len(fid))
+			return nil, fmt.Errorf("protocol: file_identifier must be 4 bytes (got %d)", len(fid))
 		}
 		builder.FinishWithFileIdentifier(root, fid)
 	} else {
@@ -56,7 +56,7 @@ type preparedField struct {
 
 func (s *Schema) buildObject(builder *flatbuffers.Builder, obj *Object, values map[string]any) (flatbuffers.UOffsetT, error) {
 	if obj.IsStruct {
-		return 0, fmt.Errorf("harness: struct fields are not supported by the builder (%s)", ShortName(obj.Name))
+		return 0, fmt.Errorf("protocol: struct fields are not supported by the builder (%s)", ShortName(obj.Name))
 	}
 
 	prepared := make([]preparedField, 0, len(obj.Fields))
@@ -87,7 +87,7 @@ func (s *Schema) buildObject(builder *flatbuffers.Builder, obj *Object, values m
 		case base == BaseString:
 			str, ok := value.(string)
 			if !ok {
-				return 0, fmt.Errorf("harness: field %s must be a string", field.Name)
+				return 0, fmt.Errorf("protocol: field %s must be a string", field.Name)
 			}
 			prepared = append(prepared, preparedField{
 				field:  field,
@@ -96,7 +96,7 @@ func (s *Schema) buildObject(builder *flatbuffers.Builder, obj *Object, values m
 		case base == BaseObj:
 			target := s.ObjectAt(field.Type.Index)
 			if target == nil {
-				return 0, fmt.Errorf("harness: field %s has an unknown object index", field.Name)
+				return 0, fmt.Errorf("protocol: field %s has an unknown object index", field.Name)
 			}
 			childValues, err := asValuesMap(value, field.Name)
 			if err != nil {
@@ -114,7 +114,7 @@ func (s *Schema) buildObject(builder *flatbuffers.Builder, obj *Object, values m
 			}
 			prepared = append(prepared, preparedField{field: field, offset: offset})
 		default:
-			return 0, fmt.Errorf("harness: field %s uses unsupported type %s", field.Name, base)
+			return 0, fmt.Errorf("protocol: field %s uses unsupported type %s", field.Name, base)
 		}
 	}
 
@@ -133,7 +133,7 @@ func (s *Schema) buildObject(builder *flatbuffers.Builder, obj *Object, values m
 func (s *Schema) buildVector(builder *flatbuffers.Builder, field *Field, value any) (flatbuffers.UOffsetT, error) {
 	list, ok := value.([]any)
 	if !ok {
-		return 0, fmt.Errorf("harness: field %s must be an array", field.Name)
+		return 0, fmt.Errorf("protocol: field %s must be an array", field.Name)
 	}
 	n := len(list)
 	element := field.Type.Element
@@ -144,7 +144,7 @@ func (s *Schema) buildVector(builder *flatbuffers.Builder, field *Field, value a
 		for i, item := range list {
 			str, ok := item.(string)
 			if !ok {
-				return 0, fmt.Errorf("harness: field %s[%d] must be a string", field.Name, i)
+				return 0, fmt.Errorf("protocol: field %s[%d] must be a string", field.Name, i)
 			}
 			offsets[i] = builder.CreateString(str)
 		}
@@ -157,10 +157,10 @@ func (s *Schema) buildVector(builder *flatbuffers.Builder, field *Field, value a
 	case element == BaseObj:
 		target := s.ObjectAt(field.Type.Index)
 		if target == nil {
-			return 0, fmt.Errorf("harness: field %s has an unknown object index", field.Name)
+			return 0, fmt.Errorf("protocol: field %s has an unknown object index", field.Name)
 		}
 		if target.IsStruct {
-			return 0, fmt.Errorf("harness: vectors of structs are not supported (%s)", field.Name)
+			return 0, fmt.Errorf("protocol: vectors of structs are not supported (%s)", field.Name)
 		}
 		offsets := make([]flatbuffers.UOffsetT, n)
 		for i, item := range list {
@@ -188,7 +188,7 @@ func (s *Schema) buildVector(builder *flatbuffers.Builder, field *Field, value a
 		for i, item := range list {
 			value, err := s.convertScalarType(elemType, item)
 			if err != nil {
-				return 0, fmt.Errorf("harness: field %s[%d]: %w", field.Name, i, err)
+				return 0, fmt.Errorf("protocol: field %s[%d]: %w", field.Name, i, err)
 			}
 			converted[i] = value
 		}
@@ -200,7 +200,7 @@ func (s *Schema) buildVector(builder *flatbuffers.Builder, field *Field, value a
 		return builder.EndVector(n), nil
 
 	default:
-		return 0, fmt.Errorf("harness: vectors of %s are not supported (%s)", element, field.Name)
+		return 0, fmt.Errorf("protocol: vectors of %s are not supported (%s)", element, field.Name)
 	}
 }
 
@@ -319,7 +319,7 @@ func (s *Schema) defaultValue(field *Field) (any, error) {
 			return int64(1), nil
 		}
 	}
-	return nil, fmt.Errorf("harness: required field %s uses unsupported type %s", field.Name, field.Type.Base)
+	return nil, fmt.Errorf("protocol: required field %s uses unsupported type %s", field.Name, field.Type.Base)
 }
 
 func prependScalarSlot(builder *flatbuffers.Builder, slot int, field *Field, value any) {
@@ -454,7 +454,7 @@ func asValuesMap(value any, field string) (map[string]any, error) {
 	}
 	values, ok := value.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("harness: field %s must be an object", field)
+		return nil, fmt.Errorf("protocol: field %s must be an object", field)
 	}
 	return values, nil
 }

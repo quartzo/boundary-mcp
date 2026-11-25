@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"boundary-mcp/internal/fbs"
-	"boundary-mcp/internal/harness"
+	"boundary-mcp/internal/protocol"
 )
 
 func TestClassify(t *testing.T) {
@@ -38,11 +38,11 @@ func TestClassify(t *testing.T) {
 func TestDiffSchemasAdditive(t *testing.T) {
 	t.Parallel()
 
-	base := requestSchema(field("id", 0, harness.BaseString, true), field("count", 1, harness.BaseUInt, false))
+	base := requestSchema(field("id", 0, protocol.BaseString, true), field("count", 1, protocol.BaseUInt, false))
 	candidate := requestSchema(
-		field("id", 0, harness.BaseString, true),
-		field("count", 1, harness.BaseUInt, false),
-		field("note", 2, harness.BaseString, false),
+		field("id", 0, protocol.BaseString, true),
+		field("count", 1, protocol.BaseUInt, false),
+		field("note", 2, protocol.BaseString, false),
 	)
 	changes := DiffSchemas(base, candidate)
 	if got := Classify(changes, false); got != ClassAdditive {
@@ -57,10 +57,10 @@ func TestDiffSchemasAdditive(t *testing.T) {
 func TestDiffSchemasRequiredFieldIsBreaking(t *testing.T) {
 	t.Parallel()
 
-	base := requestSchema(field("id", 0, harness.BaseString, true))
+	base := requestSchema(field("id", 0, protocol.BaseString, true))
 	candidate := requestSchema(
-		field("id", 0, harness.BaseString, true),
-		field("note", 1, harness.BaseString, true),
+		field("id", 0, protocol.BaseString, true),
+		field("note", 1, protocol.BaseString, true),
 	)
 	changes := DiffSchemas(base, candidate)
 	if got := Classify(changes, false); got != ClassBreaking {
@@ -75,8 +75,8 @@ func TestDiffSchemasRequiredFieldIsBreaking(t *testing.T) {
 func TestDiffSchemasRenameIsSourceBreaking(t *testing.T) {
 	t.Parallel()
 
-	base := requestSchema(field("count", 1, harness.BaseUInt, false))
-	candidate := requestSchema(field("total", 1, harness.BaseUInt, false))
+	base := requestSchema(field("count", 1, protocol.BaseUInt, false))
+	candidate := requestSchema(field("total", 1, protocol.BaseUInt, false))
 	changes := DiffSchemas(base, candidate)
 	if got := Classify(changes, false); got != ClassBreaking {
 		t.Fatalf("class = %q, want breaking; changes = %+v", got, changes)
@@ -89,8 +89,8 @@ func TestDiffSchemasRenameIsSourceBreaking(t *testing.T) {
 func TestDiffSchemasRequiredRemovedIsSemantic(t *testing.T) {
 	t.Parallel()
 
-	base := requestSchema(field("id", 0, harness.BaseString, true))
-	candidate := requestSchema(field("id", 0, harness.BaseString, false))
+	base := requestSchema(field("id", 0, protocol.BaseString, true))
+	candidate := requestSchema(field("id", 0, protocol.BaseString, false))
 	changes := DiffSchemas(base, candidate)
 	if got := Classify(changes, false); got != ClassSemanticChange {
 		t.Fatalf("class = %q, want semantic_change; changes = %+v", got, changes)
@@ -103,18 +103,18 @@ func TestDiffSchemasRequiredRemovedIsSemantic(t *testing.T) {
 func TestDiffSchemasEnumAdditive(t *testing.T) {
 	t.Parallel()
 
-	base := &harness.Schema{
-		Enums: []*harness.Enum{{
+	base := &protocol.Schema{
+		Enums: []*protocol.Enum{{
 			Name:       "test.Color",
-			Values:     []harness.EnumValue{{Name: "RED", Value: 0}},
-			Underlying: harness.Type{Base: harness.BaseByte, Index: -1},
+			Values:     []protocol.EnumValue{{Name: "RED", Value: 0}},
+			Underlying: protocol.Type{Base: protocol.BaseByte, Index: -1},
 		}},
 	}
-	candidate := &harness.Schema{
-		Enums: []*harness.Enum{{
+	candidate := &protocol.Schema{
+		Enums: []*protocol.Enum{{
 			Name:       "test.Color",
-			Values:     []harness.EnumValue{{Name: "RED", Value: 0}, {Name: "BLUE", Value: 1}},
-			Underlying: harness.Type{Base: harness.BaseByte, Index: -1},
+			Values:     []protocol.EnumValue{{Name: "RED", Value: 0}, {Name: "BLUE", Value: 1}},
+			Underlying: protocol.Type{Base: protocol.BaseByte, Index: -1},
 		}},
 	}
 	changes := DiffSchemas(base, candidate)
@@ -243,16 +243,16 @@ root_type Envelope;
 	})
 }
 
-func requestSchema(fields ...*harness.Field) *harness.Schema {
-	request := &harness.Object{Name: "test.Request", Fields: fields}
-	return &harness.Schema{Objects: []*harness.Object{request}, Root: request}
+func requestSchema(fields ...*protocol.Field) *protocol.Schema {
+	request := &protocol.Object{Name: "test.Request", Fields: fields}
+	return &protocol.Schema{Objects: []*protocol.Object{request}, Root: request}
 }
 
-func field(name string, id uint16, base harness.BaseType, required bool) *harness.Field {
-	return &harness.Field{
+func field(name string, id uint16, base protocol.BaseType, required bool) *protocol.Field {
+	return &protocol.Field{
 		Name:     name,
 		ID:       id,
-		Type:     harness.Type{Base: base, Index: -1},
+		Type:     protocol.Type{Base: base, Index: -1},
 		Required: required,
 	}
 }

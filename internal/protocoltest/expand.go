@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"boundary-mcp/internal/fbs"
-	"boundary-mcp/internal/harness"
+	"boundary-mcp/internal/protocol"
 )
 
 // ExpandOptions configures deterministic expansion of a spec.
@@ -87,7 +87,7 @@ func Expand(ctx context.Context, opts ExpandOptions, spec *Spec) (*Artifact, err
 			name = fmt.Sprintf("seed-%d", i+1)
 		}
 
-		frame, err := schema.BuildFrame(harness.FrameSpec{Table: seed.Table, Values: seed.Values})
+		frame, err := schema.BuildFrame(protocol.FrameSpec{Table: seed.Table, Values: seed.Values})
 		if err != nil {
 			return nil, fmt.Errorf("protocoltest: seed %q: %w", name, err)
 		}
@@ -191,7 +191,7 @@ func mutationCategory(name string) string {
 	}
 }
 
-func loadSchema(ctx context.Context, opts ExpandOptions, ref string) (*harness.Schema, func(), error) {
+func loadSchema(ctx context.Context, opts ExpandOptions, ref string) (*protocol.Schema, func(), error) {
 	if strings.TrimSpace(ref) == "" {
 		return nil, nil, errors.New("protocoltest: schema path is required")
 	}
@@ -209,7 +209,7 @@ func loadSchema(ctx context.Context, opts ExpandOptions, ref string) (*harness.S
 	}
 
 	if !strings.HasSuffix(strings.ToLower(path), ".fbs") {
-		schema, err := harness.LoadSchema(path)
+		schema, err := protocol.LoadSchema(path)
 		return schema, func() {}, err
 	}
 
@@ -228,7 +228,7 @@ func loadSchema(ctx context.Context, opts ExpandOptions, ref string) (*harness.S
 		cleanup()
 		return nil, nil, err
 	}
-	schema, err := harness.LoadSchema(bfbs)
+	schema, err := protocol.LoadSchema(bfbs)
 	if err != nil {
 		cleanup()
 		return nil, nil, err

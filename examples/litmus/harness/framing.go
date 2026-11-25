@@ -1,4 +1,4 @@
-package fbs
+package harness
 
 import (
 	"encoding/binary"
@@ -16,9 +16,9 @@ const DefaultMaxFrameSize = 64 << 20
 
 var (
 	// ErrFrameTooLarge is returned when a payload exceeds the configured limit.
-	ErrFrameTooLarge = errors.New("fbs: frame exceeds maximum size")
+	ErrFrameTooLarge = errors.New("harness: frame exceeds maximum size")
 	// ErrShortFrame is returned when a frame is truncated.
-	ErrShortFrame = errors.New("fbs: truncated frame")
+	ErrShortFrame = errors.New("harness: truncated frame")
 )
 
 // EncodeFrame returns payload prefixed with its little-endian uint32 length.
@@ -49,7 +49,7 @@ func NewWriter(w io.Writer) *Writer {
 // writer without an intermediate allocation.
 func (w *Writer) WriteFrame(payload []byte) error {
 	if w.w == nil {
-		return errors.New("fbs: nil writer")
+		return errors.New("harness: nil writer")
 	}
 	if uint64(len(payload)) > math.MaxUint32 {
 		return fmt.Errorf("%w: %d bytes", ErrFrameTooLarge, len(payload))
@@ -59,10 +59,10 @@ func (w *Writer) WriteFrame(payload []byte) error {
 	binary.LittleEndian.PutUint32(header[:], uint32(len(payload)))
 
 	if err := writeAll(w.w, header[:]); err != nil {
-		return fmt.Errorf("fbs: write header: %w", err)
+		return fmt.Errorf("harness: write header: %w", err)
 	}
 	if err := writeAll(w.w, payload); err != nil {
-		return fmt.Errorf("fbs: write payload: %w", err)
+		return fmt.Errorf("harness: write payload: %w", err)
 	}
 	return nil
 }
@@ -96,7 +96,7 @@ func (r *Reader) MaxFrameSize() int { return int(r.max) }
 // ends cleanly at a frame boundary.
 func (r *Reader) ReadFrame() ([]byte, error) {
 	if r.r == nil {
-		return nil, errors.New("fbs: nil reader")
+		return nil, errors.New("harness: nil reader")
 	}
 
 	var header [HeaderSize]byte
@@ -107,7 +107,7 @@ func (r *Reader) ReadFrame() ([]byte, error) {
 		if errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, fmt.Errorf("%w: header: %v", ErrShortFrame, err)
 		}
-		return nil, fmt.Errorf("fbs: read header: %w", err)
+		return nil, fmt.Errorf("harness: read header: %w", err)
 	}
 
 	size := binary.LittleEndian.Uint32(header[:])
@@ -120,7 +120,7 @@ func (r *Reader) ReadFrame() ([]byte, error) {
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, fmt.Errorf("%w: payload: %v", ErrShortFrame, err)
 		}
-		return nil, fmt.Errorf("fbs: read payload: %w", err)
+		return nil, fmt.Errorf("harness: read payload: %w", err)
 	}
 	return payload, nil
 }

@@ -1,6 +1,7 @@
-// Package harness verifies actor binaries against the boundary contract without
-// access to the actor's source code.
-package harness
+// Package protocol implements the deterministic protocol core: .bfbs
+// reflection, frame validation, field reading and mutation, and a dynamic
+// FlatBuffers builder. It never runs actor code.
+package protocol
 
 import (
 	"encoding/binary"
@@ -9,7 +10,7 @@ import (
 	"math"
 )
 
-var errMalformed = errors.New("harness: malformed flatbuffer")
+var errMalformed = errors.New("protocol: malformed flatbuffer")
 
 // decoder reads FlatBuffers with bounds checks. Methods panic with
 // errMalformed on invalid input; exported entry points recover and return the

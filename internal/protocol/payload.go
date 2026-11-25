@@ -1,4 +1,4 @@
-package harness
+package protocol
 
 import (
 	"encoding/binary"
@@ -24,11 +24,11 @@ func (s *Schema) ValidateFor(payload []byte, tableName string) (err error) {
 	if tableName != "" {
 		obj = s.Object(tableName)
 		if obj == nil {
-			return fmt.Errorf("harness: unknown table %q", tableName)
+			return fmt.Errorf("protocol: unknown table %q", tableName)
 		}
 	}
 	if obj == nil {
-		return errors.New("harness: schema has no root table")
+		return errors.New("protocol: schema has no root table")
 	}
 
 	d := &decoder{b: payload}
@@ -37,7 +37,7 @@ func (s *Schema) ValidateFor(payload []byte, tableName string) (err error) {
 
 func (s *Schema) validateTable(d *decoder, tablePos int, obj *Object, depth int) error {
 	if depth > 32 {
-		return errors.New("harness: nested table depth exceeded")
+		return errors.New("protocol: nested table depth exceeded")
 	}
 	if obj.IsStruct {
 		d.check(tablePos, int(obj.ByteSize))
@@ -198,7 +198,7 @@ func (s *Schema) ReadScalar(payload []byte, fieldName string) (value any, err er
 		return nil, err
 	}
 	if !field.Type.Base.IsScalar() {
-		return nil, fmt.Errorf("harness: field %q is not scalar", fieldName)
+		return nil, fmt.Errorf("protocol: field %q is not scalar", fieldName)
 	}
 	d := &decoder{b: payload}
 	return d.scalarValue(field.Type.Base, pos), nil
@@ -213,7 +213,7 @@ func (s *Schema) ReadString(payload []byte, fieldName string) (value string, err
 		return "", err
 	}
 	if field.Type.Base != BaseString {
-		return "", fmt.Errorf("harness: field %q is not a string", fieldName)
+		return "", fmt.Errorf("protocol: field %q is not a string", fieldName)
 	}
 	return (&decoder{b: payload}).stringAt(pos), nil
 }
@@ -233,7 +233,7 @@ func (s *Schema) ReadFieldFor(payload []byte, tableName, fieldName string) (valu
 	case field.Type.Base.IsScalar():
 		return d.scalarValue(field.Type.Base, pos), nil
 	default:
-		return nil, fmt.Errorf("harness: field %q is not scalar or string", fieldName)
+		return nil, fmt.Errorf("protocol: field %q is not scalar or string", fieldName)
 	}
 }
 
@@ -243,11 +243,11 @@ func (s *Schema) ReadFieldPath(payload []byte, path string) (value any, err erro
 	defer recoverMalformed(&err)
 
 	if strings.TrimSpace(path) == "" {
-		return nil, errors.New("harness: empty field path")
+		return nil, errors.New("protocol: empty field path")
 	}
 	obj := s.Root
 	if obj == nil {
-		return nil, errors.New("harness: schema has no root table")
+		return nil, errors.New("protocol: schema has no root table")
 	}
 
 	d := &decoder{b: payload}
@@ -257,11 +257,11 @@ func (s *Schema) ReadFieldPath(payload []byte, path string) (value any, err erro
 	for i, part := range parts {
 		field := obj.Field(part)
 		if field == nil {
-			return nil, fmt.Errorf("harness: table %s has no field %q", ShortName(obj.Name), part)
+			return nil, fmt.Errorf("protocol: table %s has no field %q", ShortName(obj.Name), part)
 		}
 		pos, ok := d.fieldPos(tablePos, field.ID)
 		if !ok {
-			return nil, fmt.Errorf("harness: field %q is absent", path)
+			return nil, fmt.Errorf("protocol: field %q is absent", path)
 		}
 
 		if i == len(parts)-1 {
@@ -271,24 +271,24 @@ func (s *Schema) ReadFieldPath(payload []byte, path string) (value any, err erro
 			case field.Type.Base.IsScalar():
 				return d.scalarValue(field.Type.Base, pos), nil
 			default:
-				return nil, fmt.Errorf("harness: field %q is not scalar or string", path)
+				return nil, fmt.Errorf("protocol: field %q is not scalar or string", path)
 			}
 		}
 
 		if field.Type.Base != BaseObj {
-			return nil, fmt.Errorf("harness: field %q is not a table", part)
+			return nil, fmt.Errorf("protocol: field %q is not a table", part)
 		}
 		target := s.ObjectAt(field.Type.Index)
 		if target == nil {
-			return nil, fmt.Errorf("harness: unknown object index %d", field.Type.Index)
+			return nil, fmt.Errorf("protocol: unknown object index %d", field.Type.Index)
 		}
 		if target.IsStruct {
-			return nil, fmt.Errorf("harness: struct traversal is not supported")
+			return nil, fmt.Errorf("protocol: struct traversal is not supported")
 		}
 		tablePos = d.deref(pos)
 		obj = target
 	}
-	return nil, errors.New("harness: invalid field path")
+	return nil, errors.New("protocol: invalid field path")
 }
 
 func (s *Schema) rootField(payload []byte, fieldName string) (*Field, int, error) {
@@ -300,21 +300,21 @@ func (s *Schema) fieldFor(payload []byte, tableName, fieldName string) (*Field, 
 	if tableName != "" {
 		obj = s.Object(tableName)
 		if obj == nil {
-			return nil, 0, fmt.Errorf("harness: unknown table %q", tableName)
+			return nil, 0, fmt.Errorf("protocol: unknown table %q", tableName)
 		}
 	}
 	if obj == nil {
-		return nil, 0, errors.New("harness: schema has no root table")
+		return nil, 0, errors.New("protocol: schema has no root table")
 	}
 	field := obj.Field(fieldName)
 	if field == nil {
-		return nil, 0, fmt.Errorf("harness: table %s has no field %q", ShortName(obj.Name), fieldName)
+		return nil, 0, fmt.Errorf("protocol: table %s has no field %q", ShortName(obj.Name), fieldName)
 	}
 
 	d := &decoder{b: payload}
 	pos, ok := d.fieldPos(d.root(), field.ID)
 	if !ok {
-		return nil, 0, fmt.Errorf("harness: field %q is absent", fieldName)
+		return nil, 0, fmt.Errorf("protocol: field %q is absent", fieldName)
 	}
 	return field, pos, nil
 }
@@ -329,7 +329,7 @@ func (s *Schema) MutateScalar(payload []byte, fieldName string, value any) (out 
 		return nil, err
 	}
 	if !field.Type.Base.IsScalar() {
-		return nil, fmt.Errorf("harness: field %q is not scalar", fieldName)
+		return nil, fmt.Errorf("protocol: field %q is not scalar", fieldName)
 	}
 
 	out = append([]byte(nil), payload...)
@@ -352,7 +352,7 @@ func (s *Schema) BoundaryMutations(payload []byte) (mutations []Mutation, err er
 
 	obj := s.Root
 	if obj == nil {
-		return nil, errors.New("harness: schema has no root table")
+		return nil, errors.New("protocol: schema has no root table")
 	}
 	d := &decoder{b: payload}
 	root := d.root()
@@ -528,14 +528,14 @@ func (d *decoder) intValue(base BaseType, pos int) int64 {
 
 func writeScalar(b []byte, pos int, base BaseType, value any) error {
 	if pos < 0 || pos+base.size() > len(b) || base.size() == 0 {
-		return errors.New("harness: scalar field is out of bounds")
+		return errors.New("protocol: scalar field is out of bounds")
 	}
 
 	switch base {
 	case BaseBool:
 		v, ok := value.(bool)
 		if !ok {
-			return fmt.Errorf("harness: %s value must be bool", base)
+			return fmt.Errorf("protocol: %s value must be bool", base)
 		}
 		if v {
 			b[pos] = 1
@@ -545,65 +545,65 @@ func writeScalar(b []byte, pos int, base BaseType, value any) error {
 	case BaseByte:
 		v, err := asInt64(value)
 		if err != nil || v < math.MinInt8 || v > math.MaxInt8 {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		b[pos] = byte(int8(v))
 	case BaseUByte:
 		v, err := asUint64(value)
 		if err != nil || v > math.MaxUint8 {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		b[pos] = byte(v)
 	case BaseShort:
 		v, err := asInt64(value)
 		if err != nil || v < math.MinInt16 || v > math.MaxInt16 {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint16(b[pos:], uint16(int16(v)))
 	case BaseUShort:
 		v, err := asUint64(value)
 		if err != nil || v > math.MaxUint16 {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint16(b[pos:], uint16(v))
 	case BaseInt:
 		v, err := asInt64(value)
 		if err != nil || v < math.MinInt32 || v > math.MaxInt32 {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint32(b[pos:], uint32(int32(v)))
 	case BaseUInt:
 		v, err := asUint64(value)
 		if err != nil || v > math.MaxUint32 {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint32(b[pos:], uint32(v))
 	case BaseLong:
 		v, err := asInt64(value)
 		if err != nil {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint64(b[pos:], uint64(v))
 	case BaseULong:
 		v, err := asUint64(value)
 		if err != nil {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint64(b[pos:], v)
 	case BaseFloat:
 		v, err := asFloat64(value)
 		if err != nil || v < -math.MaxFloat32 || v > math.MaxFloat32 {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint32(b[pos:], math.Float32bits(float32(v)))
 	case BaseDouble:
 		v, err := asFloat64(value)
 		if err != nil {
-			return fmt.Errorf("harness: %s value out of range", base)
+			return fmt.Errorf("protocol: %s value out of range", base)
 		}
 		binary.LittleEndian.PutUint64(b[pos:], math.Float64bits(v))
 	default:
-		return fmt.Errorf("harness: unsupported scalar type %s", base)
+		return fmt.Errorf("protocol: unsupported scalar type %s", base)
 	}
 	return nil
 }

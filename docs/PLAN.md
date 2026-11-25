@@ -1,6 +1,6 @@
 # Plan: Protocol-Only boundary-mcp
 
-- **Status:** Stages 1–2 implemented; Stages 3–7 pending
+- **Status:** Stages 1–3 implemented; Stages 4–7 pending
 - **Date:** 2026-11-25
 - **Decision record:** [ADR-0004](adr/0004-protocol-only-mcp.md)
 - **Supersedes in scope:** the actor-runtime and actor-verification parts of [ARCHITECTURE.md](ARCHITECTURE.md) §6–§7 and [WORKFLOWS.md](WORKFLOWS.md) §2–§3
@@ -16,7 +16,7 @@ The repository currently carries three responsibilities:
 Only (1) is the product. (2) and (3) were introduced to make the Phase 5 disposability experiment reproducible, and were then documented as the product's isolation and verification models. That inversion has concrete costs:
 
 - the coder of the user became a dependency of the contract manager;
-- `verify_actor_behavior` executes code the server did not write (`internal/harness/verifier.go:103`), and accepts an agent-supplied `entrypoint_cmd` (`:75-80`);
+- `verify_actor_behavior` executed code the server did not write (`examples/litmus/harness/verifier.go:103` before the move), and accepted an agent-supplied `entrypoint_cmd` (`:75-80`);
 - the MCP assumes it shares a filesystem with the actor's source (`actors/<name>`), although the actor code never travels through the protocol;
 - "capability-based physical isolation" is a property the server cannot provide for an external client;
 - hidden suites exist to prevent overfitting to *behavioral* tests, which only matters while the server runs those tests.
@@ -120,18 +120,17 @@ Requirements:
 - **No execution keys.** `mode`, `build`, `run`, `timeout_ms`, `scenarios` and `entrypoint_cmd` do not exist in this format.
 - **Public by default.** The spec is normative and shared; hiding it only protected behavioral tests, which leave the system.
 
-The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`internal/harness/schema.go`), frame building (`build.go`) and structural mutations (`payload.go`).
+The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`internal/protocol/schema.go`), frame building (`build.go`) and structural mutations (`payload.go`).
 
 ## 5. What moves, what is deleted
 
 | Path | Action |
 | --- | --- |
-| `internal/harness/verifier.go` | move to `examples/litmus/` (Stage 3), then delete from `internal` |
-| `internal/harness/client.go`, `peer.go`, `suite.go`, `checks.go`, `wire.go` | move to `examples/litmus/` (behavioral runners) |
-| `internal/harness/schema.go`, `fb.go`, `payload.go`, `build.go` | keep as the protocol-test core (package rename optional) |
-| `internal/fbs/framing.go` | move to the example (data-plane transport) |
-| `examples/litmus/governance/protocol_tests/` | add now; `hidden_tests/` stays until Stage 3 |
-| `examples/litmus/governance/hidden_tests/` | delete with the behavioral engine (Stage 3) |
+| `internal/protocol/` (`schema.go`, `fb.go`, `payload.go`, `build.go`) | the protocol-test core; renamed from `internal/harness` |
+| `examples/litmus/harness/` (`verifier.go`, `client.go`, `peer.go`, `suite.go`, `checks.go`, `wire.go`) | the behavioral engine |
+| `internal/fbs/framing.go` | moved to `examples/litmus/harness/framing.go` |
+| `examples/litmus/governance/protocol_tests/` | normative protocol test spec |
+| `examples/litmus/governance/hidden_tests/` | stays as fixture data for the reference verifier |
 | `examples/litmus/verify/` | repurpose as the reference runner used by `make litmus` |
 | `cmd/sandbox-run/` | move to `examples/litmus/sandbox-run/` |
 | `mcp.Options.Verifier`, `-actors`, `-hidden-tests` | delete |
@@ -145,7 +144,7 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 - The generator reuses `.bfbs` reflection, the frame builder and the structural mutations.
 - Protocol resources (`fbs`, `purpose`, `tests`) and the actor context template are registered together with resource capabilities.
 - `get_protocol_tests` is available as a fallback tool.
-- `examples/litmus/governance/protocol_tests/protocol.json` sits next to `hidden_tests/`; the behavioral suites are removed in Stage 3, not here.
+- `examples/litmus/governance/protocol_tests/protocol.json` sits next to `hidden_tests/`, which remains as fixture data for the reference verifier.
 
 **Acceptance:** `boundary://protocol/{hash}/tests` returns the validated specs; repeated `protocoltest.Expand` of the same spec is byte-identical; no spec key implies a process.
 
@@ -157,10 +156,11 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 
 **Acceptance:** the server builds and serves its tools and resources with no actor directory present; no tool runs a subprocess.
 
-### Stage 3 — Split the harness
+### Stage 3 — Split the harness (implemented)
 
-- Isolate the protocol-test core from the behavioral engine.
-- Move the behavioral engine and suites under `examples/litmus` and update their tests.
+- The core moved to `internal/protocol`: `.bfbs` reflection, frame validation and reading, structural mutations and the dynamic builder.
+- The behavioral engine moved to `examples/litmus/harness`: verifier, client, peer, suites, checks, wire and the length-prefixed framing that used to live in `internal/fbs`.
+- `examples/litmus/verify` imports the example package; `internal/versioning` and `internal/protocoltest` import `internal/protocol`.
 
 **Acceptance:** `go build ./...` and `go test ./...` pass; the litmus example still runs end to end.
 
@@ -215,7 +215,7 @@ The generator reuses the existing, actor-free pieces: `.bfbs` reflection (`inter
 
 ## 9. Open items
 
-1. Rename `internal/harness` to `internal/protocol` while keeping the reflection/builder/mutation files? Relevant for clarity, not behavior.
+1. Resolved in Stage 3: the core is `internal/protocol`; the behavioral engine is `examples/litmus/harness`.
 2. Does `purpose.md` filtering belong in the resource template (`boundary://actor/{name}/context`) or stay in `get_boundary_context` only? Prefer both, one implementation.
 3. Should the compatibility manifest be a resource or an on-demand tool? The manifest depends on a base version, which fits a tool better.
 4. Where do generated SDKs live? `-sdk-out` stays; the server still owns regeneration on commit.

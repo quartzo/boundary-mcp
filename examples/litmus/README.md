@@ -21,14 +21,17 @@ examples/litmus/
 │   ├── versions/<hash>/      # immutable snapshots
 │   ├── actors/*.json         # adoption pins
 │   ├── compat/*.json         # compatibility manifests
-│   └── hidden_tests/
+│   ├── protocol_tests/
+│   │   └── protocol.json     # normative protocol test spec
+│   └── hidden_tests/         # behavioral suites for the example verifier
 │       ├── actor_ingest.json
 │       └── actor_enrich.json
 ├── actors/
 │   ├── actor_ingest/       # nested Go module
 │   └── actor_enrich/       # nested Go module
 ├── sdk/go/litmus/          # generated module, committed for reproducibility
-├── verify/                 # runs the hidden suites with internal/harness
+├── harness/                # reference behavioral verifier (imports internal/protocol)
+├── verify/                 # runs the behavioral suites with examples/litmus/harness
 ├── prompts/
 │   └── reconstruct_actor_enrich.md
 ├── scripts/
@@ -129,5 +132,7 @@ suites directly; CI can run the same command.
   tracked as a hardening item in the architecture roadmap.
 - The generated Go bindings are committed so the example works without
   `flatc`. Run `make sdk` after changing `protocol.fbs`.
-- `verify` imports `internal/harness` because it lives in the same Go module.
-  Actors import only the generated SDK (`litmus`) and the standard library.
+- `verify` imports `examples/litmus/harness`; the behavioral engine imports
+  `internal/protocol` for schema reflection, validation and frame building.
+  Both live in the same Go module. Actors import only the generated SDK
+  (`litmus`) and the standard library.

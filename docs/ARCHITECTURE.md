@@ -95,7 +95,7 @@ boundary-system/
 └── internal/
     ├── compiler/                   # Bidirectional bridge purpose.md <-> protocol.fbs
     ├── fbs/                        # Deterministic wrapper for `flatc` and `--conform`
-    ├── harness/                    # Test runner (Actor as Server and Client)
+    ├── protocol/                   # .bfbs reflection, frame builder, validation
     └── mcp/                        # MCP tool definitions and handlers
 ```
 
@@ -180,7 +180,7 @@ The sole mechanism through which an agent can request changes to the protocol or
 
 ### 5.3 `verify_actor_behavior` (removed)
 
-`verify_actor_behavior` is no longer an MCP tool. The server does not build or run actor code. Behavioral verification is a reference tool (`internal/harness`, driven by `examples/litmus/verify`) that the user's CI runs against the actor directory. See [ADR-0004](adr/0004-protocol-only-mcp.md) and [PLAN.md](PLAN.md).
+`verify_actor_behavior` is no longer an MCP tool. The server does not build or run actor code. Behavioral verification is a reference tool (`examples/litmus/harness`, driven by `examples/litmus/verify`) built on `internal/protocol`; the user's CI runs it against the actor directory. See [ADR-0004](adr/0004-protocol-only-mcp.md) and [PLAN.md](PLAN.md).
 
 ### 5.4 `sync_from_manual_edit` (Administrative Trigger / CLI)
 
@@ -204,7 +204,7 @@ The end-to-end workflows — actor development, current auto-commit, designed dr
 
 ## 6. Deterministic Test Induction and Execution Engine
 
-To ensure black-box actors respect both structural types and temporal semantics, `internal/harness` implements two verification modes driven by `.fbs` reflection and `state_machine.json`. The package parses `.bfbs` into an in-memory schema, validates payloads, generates structural mutations and exposes a **Harness Client** (receivers) and a **Reference Mock Peer** (emitters) over length-prefixed Unix-socket framing.
+To ensure black-box actors respect both structural types and temporal semantics, the reference verifier (`examples/litmus/harness`, built on `internal/protocol`) implements two verification modes driven by `.fbs` reflection and `state_machine.json`. The package parses `.bfbs` into an in-memory schema, validates payloads, generates structural mutations and exposes a **Harness Client** (receivers) and a **Reference Mock Peer** (emitters) over length-prefixed Unix-socket framing.
 
 ### 6.1 Testing an Actor as Server (Receiver)
 
@@ -308,7 +308,7 @@ The launcher:
 - [x] Integrate an LLM client (OpenAI-compatible, strict JSON Schema structured outputs) inside `boundary-mcp` to translate `purpose.md` ↔ `protocol.fbs` + `state_machine.json`.
 - [x] Implement audit logging in `governance/history/` with human-readable unified diffs and per-commit metadata.
 
-### Phase 4: Boundary Test Inducer (`internal/harness`)
+### Phase 4: Boundary Test Engine (`internal/protocol`, `examples/litmus/harness`)
 
 - [x] Implement `.bfbs` reflection (tables, fields, types, enums, defaults), a dynamic FlatBuffer builder for seed/response frames, and structural mutation generation (boundary scalars, invalid UTF-8, truncation, corrupted offsets), with `pgregory.net/rapid` property tests.
 - [x] Implement the Reference Mock Peer (state-machine mock) used to verify client actors, plus the Harness Client for receiver actors, over length-prefixed Unix-socket framing.
@@ -345,4 +345,4 @@ Its authority is bounded by domain, not by rank: `flatc` remains the conformance
 
 ### Implementation Note for Phase 4
 
-One particularly useful feature of `flatc` for `internal/harness` is **`--binary --schema`**, which compiles any `.fbs` into a self-describing `.bfbs` (*Binary FlatBuffer Schema*). Using FlatBuffers' official reflection schema (`reflection.fbs`), the Go harness can **dynamically inspect tables, field types, enums, and default values at runtime** without recompiling `boundary-mcp` whenever a contract evolves — making the structured fuzzer and Reference Mock Peer generic across any protocol you define.
+One particularly useful feature of `flatc` for `internal/protocol` is **`--binary --schema`**, which compiles any `.fbs` into a self-describing `.bfbs` (*Binary FlatBuffer Schema*). Using FlatBuffers' official reflection schema (`reflection.fbs`), the Go harness can **dynamically inspect tables, field types, enums, and default values at runtime** without recompiling `boundary-mcp` whenever a contract evolves — making the structured fuzzer and Reference Mock Peer generic across any protocol you define.

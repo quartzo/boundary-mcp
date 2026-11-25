@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"boundary-mcp/internal/harness"
+	"boundary-mcp/examples/litmus/harness"
 )
 
 func main() {

@@ -6,8 +6,6 @@ import (
 	"net"
 	"os"
 	"time"
-
-	"boundary-mcp/internal/fbs"
 )
 
 // Conn is a framed bidirectional message channel.
@@ -21,16 +19,16 @@ type Conn interface {
 // ([uint32 LE length][payload]).
 type FramedConn struct {
 	conn net.Conn
-	r    *fbs.Reader
-	w    *fbs.Writer
+	r    *Reader
+	w    *Writer
 }
 
 // NewFramedConn wraps conn.
 func NewFramedConn(conn net.Conn) *FramedConn {
 	return &FramedConn{
 		conn: conn,
-		r:    fbs.NewReader(conn, 0),
-		w:    fbs.NewWriter(conn),
+		r:    NewReader(conn, 0),
+		w:    NewWriter(conn),
 	}
 }
 

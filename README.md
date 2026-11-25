@@ -239,7 +239,8 @@ The target layout (see the architecture document for details):
 ├── docs/
 │   └── ARCHITECTURE.md      # Design specification
 ├── examples/
-│   └── litmus/              # two-actor acceptance example and hidden suites
+│   └── litmus/              # two-actor acceptance example
+│       └── harness/         # reference behavioral verifier (example/CI only)
 ├── governance/              # (planned) source of truth: purpose, schema, tests
 ├── sdk/                     # (planned) generated FlatBuffers bindings
 ├── actors/                  # (planned) one isolated sandbox per actor
@@ -251,12 +252,13 @@ The target layout (see the architecture document for details):
 │   └── versionctl/          # content-addressed versions, aliases, adoption
 └── internal/
     ├── compiler/            # LLM semantic compiler, flatc gates, history
-    ├── fbs/                 # flatc wrapper, .bfbs reflection, framing
+    ├── fbs/                 # flatc wrapper
     ├── governance/          # purpose.md parser and actor filtering
-    ├── harness/             # .bfbs reflection, frame builder, verifier engines
     ├── judge/               # semantic gate: JEV / System One judgments
     ├── llm/                 # OpenAI-compatible structured-output client
-    ├── mcp/                 # MCP tools, handlers, HTTP auth
+    ├── mcp/                 # MCP tools, resources, handlers, HTTP auth
+    ├── protocol/            # .bfbs reflection, frame builder, validation, mutations
+    ├── protocoltest/        # declarative protocol test spec and expansion
     └── versioning/          # version hashes, aliases, compatibility manifests
 ```
 
@@ -357,15 +359,15 @@ Actor pins record adoption without changing the contract. The prototype does not
 
 ## Harness
 
-`internal/harness` is the reference behavioral verifier used by the litmus example and by CI. It is no longer an MCP tool. It verifies actor binaries without reading their source:
+`examples/litmus/harness` is the reference behavioral verifier used by the litmus example and by CI. It is no longer an MCP tool. It builds on `internal/protocol` for schema reflection, validation and frame building, and verifies actor binaries without reading their source:
 
-- `LoadSchema` parses the `.bfbs` emitted by `flatc --binary --schema`.
+- `protocol.LoadSchema` parses the `.bfbs` emitted by `flatc --binary --schema`.
 - `Schema.Validate` and `BoundaryMutations` check frames and generate structural mutations (boundary scalars, invalid UTF-8, truncation, corrupted offsets).
 - `HarnessClient` verifies actors that receive messages: valid seeds must respond, malformed frames may be dropped or answered with a valid buffer, and a closed connection is a failure.
 - `ReferenceMockPeer` verifies actors that emit messages with scripted request/response scenarios, checks, delays and timeout/sequence paths.
 - A dynamic builder turns `.bfbs` metadata plus field values into valid FlatBuffers, so suites never carry base64 payloads.
 
-Property tests in the harness use `pgregory.net/rapid`. `examples/litmus/verify` loads a trusted suite per actor:
+Property tests for the protocol core use `pgregory.net/rapid`. `examples/litmus/verify` loads a trusted suite per actor:
 
 ```json
 {

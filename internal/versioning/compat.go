@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"boundary-mcp/internal/fbs"
-	"boundary-mcp/internal/harness"
+	"boundary-mcp/internal/protocol"
 )
 
 // Class is a structural compatibility classification. Role-specific classes
@@ -174,11 +174,11 @@ func diffSchemas(ctx context.Context, flatc Flatc, baseProtocol, candidateProtoc
 	if err != nil {
 		return nil, fmt.Errorf("versioning: compile candidate schema: %w", err)
 	}
-	baseSchema, err := harness.LoadSchema(baseBFBS)
+	baseSchema, err := protocol.LoadSchema(baseBFBS)
 	if err != nil {
 		return nil, fmt.Errorf("versioning: load base schema: %w", err)
 	}
-	candidateSchema, err := harness.LoadSchema(candidateBFBS)
+	candidateSchema, err := protocol.LoadSchema(candidateBFBS)
 	if err != nil {
 		return nil, fmt.Errorf("versioning: load candidate schema: %w", err)
 	}
@@ -188,7 +188,7 @@ func diffSchemas(ctx context.Context, flatc Flatc, baseProtocol, candidateProtoc
 // DiffSchemas compares two parsed schemas. The comparison is structural: wire
 // identity is the field ID, while a rename is treated as a source-breaking
 // change even when flatc accepts it.
-func DiffSchemas(base, candidate *harness.Schema) []Change {
+func DiffSchemas(base, candidate *protocol.Schema) []Change {
 	if base == nil || candidate == nil {
 		return nil
 	}
@@ -248,7 +248,7 @@ func DiffSchemas(base, candidate *harness.Schema) []Change {
 	return changes
 }
 
-func diffObject(baseSchema, candidateSchema *harness.Schema, base, candidate *harness.Object, out *[]Change) {
+func diffObject(baseSchema, candidateSchema *protocol.Schema, base, candidate *protocol.Object, out *[]Change) {
 	if base.IsStruct != candidate.IsStruct {
 		*out = append(*out, Change{
 			Kind:     "object_kind_changed",
@@ -258,14 +258,14 @@ func diffObject(baseSchema, candidateSchema *harness.Schema, base, candidate *ha
 		})
 	}
 
-	baseByID := make(map[uint16]*harness.Field, len(base.Fields))
-	baseByName := make(map[string]*harness.Field, len(base.Fields))
+	baseByID := make(map[uint16]*protocol.Field, len(base.Fields))
+	baseByName := make(map[string]*protocol.Field, len(base.Fields))
 	for _, field := range base.Fields {
 		baseByID[field.ID] = field
 		baseByName[field.Name] = field
 	}
-	candidateByID := make(map[uint16]*harness.Field, len(candidate.Fields))
-	candidateByName := make(map[string]*harness.Field, len(candidate.Fields))
+	candidateByID := make(map[uint16]*protocol.Field, len(candidate.Fields))
+	candidateByName := make(map[string]*protocol.Field, len(candidate.Fields))
 	for _, field := range candidate.Fields {
 		candidateByID[field.ID] = field
 		candidateByName[field.Name] = field
@@ -321,7 +321,7 @@ func diffObject(baseSchema, candidateSchema *harness.Schema, base, candidate *ha
 	}
 }
 
-func diffField(baseSchema, candidateSchema *harness.Schema, object string, base, candidate *harness.Field, out *[]Change) {
+func diffField(baseSchema, candidateSchema *protocol.Schema, object string, base, candidate *protocol.Field, out *[]Change) {
 	add := func(change Change) {
 		change.Object = object
 		change.Field = base.Name
@@ -370,7 +370,7 @@ func diffField(baseSchema, candidateSchema *harness.Schema, object string, base,
 	}
 }
 
-func diffEnum(baseSchema, candidateSchema *harness.Schema, base, candidate *harness.Enum, out *[]Change) {
+func diffEnum(baseSchema, candidateSchema *protocol.Schema, base, candidate *protocol.Enum, out *[]Change) {
 	if base.IsUnion != candidate.IsUnion {
 		*out = append(*out, Change{
 			Kind:     "enum_union_changed",
@@ -388,14 +388,14 @@ func diffEnum(baseSchema, candidateSchema *harness.Schema, base, candidate *harn
 		})
 	}
 
-	baseByValue := make(map[int64]harness.EnumValue, len(base.Values))
-	baseByName := make(map[string]harness.EnumValue, len(base.Values))
+	baseByValue := make(map[int64]protocol.EnumValue, len(base.Values))
+	baseByName := make(map[string]protocol.EnumValue, len(base.Values))
 	for _, value := range base.Values {
 		baseByValue[value.Value] = value
 		baseByName[value.Name] = value
 	}
-	candidateByValue := make(map[int64]harness.EnumValue, len(candidate.Values))
-	candidateByName := make(map[string]harness.EnumValue, len(candidate.Values))
+	candidateByValue := make(map[int64]protocol.EnumValue, len(candidate.Values))
+	candidateByName := make(map[string]protocol.EnumValue, len(candidate.Values))
 	for _, value := range candidate.Values {
 		candidateByValue[value.Value] = value
 		candidateByName[value.Name] = value
@@ -545,46 +545,46 @@ func compatFilename(base, candidate string) string {
 	return strings.TrimPrefix(base, "sha256:") + "__" + strings.TrimPrefix(candidate, "sha256:") + ".json"
 }
 
-func rootName(schema *harness.Schema) string {
+func rootName(schema *protocol.Schema) string {
 	if schema == nil || schema.Root == nil {
 		return ""
 	}
 	return schema.Root.Name
 }
 
-func objectMap(schema *harness.Schema) map[string]*harness.Object {
-	objects := make(map[string]*harness.Object, len(schema.Objects))
+func objectMap(schema *protocol.Schema) map[string]*protocol.Object {
+	objects := make(map[string]*protocol.Object, len(schema.Objects))
 	for _, object := range schema.Objects {
 		objects[object.Name] = object
 	}
 	return objects
 }
 
-func enumMap(schema *harness.Schema) map[string]*harness.Enum {
-	enums := make(map[string]*harness.Enum, len(schema.Enums))
+func enumMap(schema *protocol.Schema) map[string]*protocol.Enum {
+	enums := make(map[string]*protocol.Enum, len(schema.Enums))
 	for _, enum := range schema.Enums {
 		enums[enum.Name] = enum
 	}
 	return enums
 }
 
-func typeName(schema *harness.Schema, typ harness.Type) string {
+func typeName(schema *protocol.Schema, typ protocol.Type) string {
 	switch typ.Base {
-	case harness.BaseVector:
+	case protocol.BaseVector:
 		return "vector<" + baseTypeName(schema, typ.Element, typ.Index) + ">"
-	case harness.BaseVector64:
+	case protocol.BaseVector64:
 		return "vector64<" + baseTypeName(schema, typ.Element, typ.Index) + ">"
-	case harness.BaseArray:
+	case protocol.BaseArray:
 		return fmt.Sprintf("array<%s,%d>", baseTypeName(schema, typ.Element, typ.Index), typ.FixedLength)
 	default:
 		return baseTypeName(schema, typ.Base, typ.Index)
 	}
 }
 
-func baseTypeName(schema *harness.Schema, base harness.BaseType, index int) string {
+func baseTypeName(schema *protocol.Schema, base protocol.BaseType, index int) string {
 	if schema != nil && index >= 0 {
 		switch base {
-		case harness.BaseObj, harness.BaseUnion, harness.BaseUType:
+		case protocol.BaseObj, protocol.BaseUnion, protocol.BaseUType:
 			if object := schema.ObjectAt(index); object != nil {
 				return base.String() + ":" + object.Name
 			}

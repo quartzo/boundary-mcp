@@ -100,3 +100,25 @@ func msgPayload() []byte {
 
 	return b
 }
+
+const buildSchema = `namespace harness.test;
+
+enum Status : byte { IDLE = 0, PENDING = 1, DONE = 2 }
+
+table Child {
+  value:long;
+}
+
+table Msg {
+  id:int;
+  name:string (required);
+  active:bool;
+  score:float;
+  status:Status;
+  child:Child;
+  tags:[string];
+  values:[int];
+}
+
+root_type Msg;
+`

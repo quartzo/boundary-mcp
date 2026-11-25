@@ -1,4 +1,4 @@
-package harness
+package protocol
 
 import (
 	"fmt"
@@ -189,7 +189,7 @@ type Schema struct {
 func LoadSchema(path string) (*Schema, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("harness: read schema: %w", err)
+		return nil, fmt.Errorf("protocol: read schema: %w", err)
 	}
 	return ParseSchema(data)
 }

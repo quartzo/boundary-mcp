@@ -1,6 +1,5 @@
 // Package fbs wraps the FlatBuffers compiler (flatc) behind a small,
-// deterministic API and provides the length-prefixed binary framing used by
-// boundary actors on the wire.
+// deterministic API.
 //
 // The wrapper never edits schemas: it only invokes flatc and surfaces its
 // diagnostics verbatim. Schema drift is rejected by flatc itself via
